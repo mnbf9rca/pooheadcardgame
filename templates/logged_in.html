@@ -1,0 +1,15 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Play cards!
+{% endblock %}
+
+{% block main %}
+                you're logged in
+                <table>
+                    {% for g in games %}
+                        <tr><td>{{ g.game_id }}</td></tr>
+                    {% endfor %}
+                </table>
+<a href='/play'>play</a>
+{% endblock %}
