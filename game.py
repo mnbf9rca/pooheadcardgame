@@ -1,25 +1,20 @@
 from cards import Card, Deck
-
-class Player:
-    def __init__(self, name):
-        self.name = name
-        self.face_down = []
-        self.face_up = []
-        self.hand = []
-
+from player import Player
+from game_helpers import persist_cards_to_database, get_users_for_game, load_cards_from_database
 
 class Game:
+    PILE_BURN = 1
+    PILE_PICK = 2
+    PILE_PLAYED = 3
+    PILE_DECK = 4
 
-    pile_types = {1: "burn pile", 2: "pick stack", 3: "played cards", 4: "deck"}
-    pile_types_inverse = {"burn": 1, "pick": 2, "played": 3, "deck": 4}
-
-    def __init__(self, player_names):
+    def __init__(self, player_IDs):
 
         #players
-        self.numer_of_players = len(player_names)
+        self.numer_of_players = len(player_IDs)
         self.players = []
-        for name in player_names:
-            player = Player(name)
+        for ID in player_IDs:
+            player = Player(ID)
             self.players.append(player)
 
         #game config
@@ -43,8 +38,8 @@ class Game:
         self.last_player = None
         self.play_list = []
 
-    '''creates a new deck of cards, deals to each player, then puts the remaining cards in the pick stack'''
     def deal(self):
+        """creates a new deck of cards, deals to each player, then puts the remaining cards in the pick stack"""
         self.deck = Deck()
 
         # although cards are shuffled and so it doesnt really matter
@@ -62,3 +57,35 @@ class Game:
         for deal in range(self.number_hand_cards):
             for player in self.players:
                 player.hand.append(self.deck.deal())
+
+    def save(self, database_connection):
+        """saves the current state of the game. If this is a new game without an ID, it creates one, otherwise it updates the existing one"""
+        if not self.game_id:
+            result = database_connection.execute('INSERT INTO "games" ("last_player_id","less_than_card","transparent_card","burn_card","reset_card","number_of_decks","number_face_down_cards","number_hand_cards","current_turn_number","last_player","gameid") VALUES (NULL,:less_than_card,:transparent_card,:burn_card,:reset_card,:number_of_decks,:number_face_down_cards,:number_hand_cards,:current_turn_number,:last_player,NULL)',
+                        less_than_card = self.less_than_card ,
+                        transparent_card = self.transparent_card,
+                        burn_card = self.burn_card,
+                        reset_card = self.reset_card,
+                        number_of_decks = self.number_of_decks,
+                        number_face_down_cards = self.number_face_down_cards,
+                        number_hand_cards = self.number_hand_cards,
+                        current_turn_number = self.current_turn_number,
+                        last_player = self.last_player)
+            self.game_id = result
+        else:
+            result = database_connection.execute('UPDATE "games" SET "less_than_card" = :less_than_card, "transparent_card" = :transparent_card, "burn_card" = :burn_card, "reset_card" = :reset_card, "number_of_decks" = :number_of_decks, "number_face_down_cards" = :number_face_down_cards ,"number_hand_cards" = :number_hand_cards,"current_turn_number" = :current_turn_number,"last_player" = :last_player WHERE game_id = :game_id)',
+                        less_than_card = self.less_than_card ,
+                        transparent_card = self.transparent_card,
+                        burn_card = self.burn_card,
+                        reset_card = self.reset_card,
+                        number_of_decks = self.number_of_decks,
+                        number_face_down_cards = self.number_face_down_cards,
+                        number_hand_cards = self.number_hand_cards,
+                        current_turn_number = self.current_turn_number,
+                        last_player = self.last_player,
+                        game_id = self.game_id)
+        persist_cards_to_database(deck = self.deck, deck_type = str(Game.PILE_DECK), game_id = str(self.game_id), database_connection = database_connection)
+        persist_cards_to_database(deck = self.burn_pile, deck_type = str(Game.PILE_BURN), game_id = str(self.game_id), database_connection = database_connection)
+        persist_cards_to_database(deck = self.played_cards, deck_type = str(Game.PILE_PLAYED), game_id = str(self.game_id), database_connection = database_connection)
+        persist_cards_to_database(deck = self.pick_stack, deck_type = str(Game.PILE_PICK), game_id = str(self.game_id), database_connection = database_connection)
+        return self.game_id

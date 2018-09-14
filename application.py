@@ -1,6 +1,7 @@
 import os
 from cards import Card, Deck
 from game import Game
+from player import Player
 
 from cs50 import SQL
 from flask import Flask, flash, redirect, render_template, request, session
@@ -10,6 +11,7 @@ from werkzeug.exceptions import default_exceptions
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from helpers import apology, login_required, lookup, usd
+from game_helpers import persist_cards_to_database, get_users_for_game, load_cards_from_database
 
 # Configure application
 app = Flask(__name__)
@@ -55,27 +57,30 @@ def logged_in():
 @app.route("/load_game")
 @login_required
 def load_game():
-    if not request.form.get("game_id"):
+    if not request.args["game_id"]:
         return apology("must provide game id", 500)
-    game_id = int(request.form.get("game_id"))
+    game_id = int(request.args["game_id"])
 
-    game = Game()
-    game.game_id = game_id
+    # check the users playing this game
+
+    players = get_users_for_game(game_id, db)
+    print("players loaded: " + str(players))
+    g = Game(players)
+    session["game"] = g
+
+    g.game_id = game_id
+    session["game_id"] = g.game_id
+
 
     # load the deck
-    cards = db.execute("SELECT card_suit, card_rank FROM game_cards WHERE game_id = :game_id AND card_location = :pile ORDER BY card_sequence DESC",
-                        game_id = game_id, pile = game.pile_types["deck"])
-    for card in cards:
-        card_to_add = Card()
-        card_to_add.rank = card.card_rank
-        card_to_add.suit = card.card_suit
-        game.deck.append(card_to_add)
+    g.deck = load_cards_from_database(Game.PILE_DECK, game_id, db)
+    print("deck loaded - " + str(len(g.deck)) + "cards")
 
     # load the burn pile
     # load the played cards
     # load the deck
 
-
+    return redirect("/play")
 
 
 @app.route("/play")
@@ -88,20 +93,18 @@ def play():
 
         g.deal()
         #save the game
-        result = db.execute('INSERT INTO "games" ("last_player_id","less_than_card","transparent_card","burn_card","reset_card","number_of_decks","number_face_down_cards","number_hand_cards","current_turn_number","last_player","gameid") VALUES (NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL)')
-        print("game id:" + str(result))
-        g.game_id = result
+        game_id = g.save(db)
+
+        print("game id:" + str(game_id))
+        session["game_id"] = g.game_id
+
+        # save player as playing this game
+        result = db.execute('INSERT INTO player_game (player_id, game_id) VALUES (:user_id, :game_id)',
+                            user_id= session["user_id"],
+                            game_id = g.game_id)
+
 
         #now save the cards
-        if len(g.deck) > 0:
-            # save the deck
-            i = 0
-            print("begin")
-            for card in g.deck:
-                print(card + " at position " + str(i))
-                insert = "INSERT INTO game_cards (game_id, card_location, card_suit, card_rank, card_sequence) VALUES (" + str(g.game_id) + ", " + str(Game.pile_types_inverse["deck"]) + ", " + str(card.suit) + ", " +  str(card.rank) + ", " + str(i) + ")"
-                result = db.execute(insert)
-                i += 1
 
 
 

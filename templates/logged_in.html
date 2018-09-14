@@ -8,7 +8,7 @@
                 you're logged in
                 <table>
                     {% for g in games %}
-                        <tr><td>{{ g.game_id }}</td></tr>
+                        <tr><td><a href='/load_game?game_id={{ g.game_id }}'>{{ g.game_id }}</a></td></tr>
                     {% endfor %}
                 </table>
 <a href='/play'>play</a>

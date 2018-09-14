@@ -1,8 +1,8 @@
 from random import shuffle
 
-'''defines a playing card'''
-class Card:
 
+class Card:
+    """defines a playing card"""
     suits = {1: "hearts", 2: "diamonds", 3: "clubs", 4: "spades" }
     ranks = {2: "two", 3: "three", 4: "four", 5: "five",
             6: "six", 7: "seven", 8: "eight", 9: "nine",
@@ -12,21 +12,25 @@ class Card:
         self.rank = rank
         self.suit = suit
 
-    '''Return a description of the card name'''
+
     def __str__(self):
+        """Return a description of the card name"""
         return ((Card.ranks[self.rank]) +  ' of ' + (Card.suits[self.suit]))
 
-    '''less than'''
+
     def __lt__(self, other):
+        """less than"""
         return self.rank < other.rank
 
-    '''equal to'''
     def __eq__(self, other):
+        """equal to"""
         return self.rank == other.rank and self.suit == other.suit
 
 
-'''defines a deck of playing cards, by default shuffled'''
+
 class Deck:
+    """defines a deck of playing cards.
+       by default a new deck is shuffled but optionally can be empty"""
     def __init__(self, new_game = True, number_of_decks = 1):
         self.cards = []
         self.current = 0
@@ -37,17 +41,18 @@ class Deck:
                 self.cards.extend([Card(s,r) for s in Card.suits for r in Card.ranks])
             self.shuffle()
 
-    '''shuffle the current deck'''
+
     def shuffle(self):
+        """shuffle the current deck"""
         shuffle(self.cards)
 
-    '''deal one card'''
     def deal(self):
+        """deal one card, returning the card and removing it from the deck"""
         card = self.cards.pop()
         return card
 
-    '''return len = how many cards left in deck'''
     def __len__(self):
+        """return len = how many cards left in deck"""
         return len(self.cards)
 
     def __iter__(self):
