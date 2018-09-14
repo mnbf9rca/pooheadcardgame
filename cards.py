@@ -1,8 +1,17 @@
 from random import shuffle
 
+class Card_Types:
+    CARD_FACE_DOWN = 1
+    CARD_FACE_UP = 2
+    CARD_HAND = 3
+
+    def __init__(self):
+        return
 
 class Card:
     """defines a playing card"""
+
+
     suits = {1: "hearts", 2: "diamonds", 3: "clubs", 4: "spades" }
     ranks = {2: "two", 3: "three", 4: "four", 5: "five",
             6: "six", 7: "seven", 8: "eight", 9: "nine",

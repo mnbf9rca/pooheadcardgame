@@ -8,14 +8,15 @@ class Game:
     PILE_PLAYED = 3
     PILE_DECK = 4
 
-    def __init__(self, player_IDs):
+    def __init__(self, player_IDs = None):
 
         #players
         self.numer_of_players = len(player_IDs)
         self.players = []
-        for ID in player_IDs:
-            player = Player(ID)
-            self.players.append(player)
+        if player_IDs:
+            for ID in player_IDs:
+                player = Player(ID)
+                self.players.append(player)
 
         #game config
         self.game_id = None
@@ -88,4 +89,22 @@ class Game:
         persist_cards_to_database(deck = self.burn_pile, deck_type = str(Game.PILE_BURN), game_id = str(self.game_id), database_connection = database_connection)
         persist_cards_to_database(deck = self.played_cards, deck_type = str(Game.PILE_PLAYED), game_id = str(self.game_id), database_connection = database_connection)
         persist_cards_to_database(deck = self.pick_stack, deck_type = str(Game.PILE_PICK), game_id = str(self.game_id), database_connection = database_connection)
+
+        for player in self.players:
+            player.save(database_connection, self.game_id)
+
         return self.game_id
+
+    def load(self, database_connection):
+        if not self.game_id:
+            raise ValueError('tried to load game without setting game_id.')
+        if not len(self.players) > 0:
+            raise ValueError('tried to load game without setting player IDs.')
+
+        self.deck = load_cards_from_database(Game.PILE_DECK, self.game_id, database_connection)
+        self.burn_pile = load_cards_from_database(Game.PILE_BURN, self.game_id, database_connection)
+        self.played_cards = load_cards_from_database(Game.PILE_PLAYED, self.game_id, database_connection)
+        self.pick_stack = load_cards_from_database(Game.PILE_PICK, self.game_id, database_connection)
+        print("loaded config and stack for game ID :" + str(self.game_id))
+        for player in self.players:
+            player.load(database_connection, self.game_id)

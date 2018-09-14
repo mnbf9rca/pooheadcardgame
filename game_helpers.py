@@ -7,7 +7,7 @@ def get_users_for_game(game_id, database_connection):
                                             game_id=game_id)
     list_of_players = []
     if len(players) > 0:
-        list_of_players.extend([Player(player["player_id"]) for player in players])
+        list_of_players.extend([player["player_id"] for player in players])
     return list_of_players
 
 def load_cards_from_database(deck_type, game_id, database_connection):
@@ -17,11 +17,6 @@ def load_cards_from_database(deck_type, game_id, database_connection):
     cards_to_return = []
     if len(cards) > 0:
         cards_to_return.extend([Card(card["card_suit"],card["card_rank"]) for card in cards])
-#        for card in cards:
-#            c = Card()
-#            c.suit = card.card_suit
-#            c.rank = card.card_rank
-#            cards_to_return.append(c)
     return cards_to_return
 
 def persist_cards_to_database(deck = [], *args, deck_type, game_id, database_connection):

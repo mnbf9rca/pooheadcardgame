@@ -70,10 +70,10 @@ def load_game():
 
     g.game_id = game_id
     session["game_id"] = g.game_id
-
+    g.load(db)
 
     # load the deck
-    g.deck = load_cards_from_database(Game.PILE_DECK, game_id, db)
+
     print("deck loaded - " + str(len(g.deck)) + "cards")
 
     # load the burn pile
