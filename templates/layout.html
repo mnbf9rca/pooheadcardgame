@@ -30,7 +30,9 @@
             </button>
             <div class="collapse navbar-collapse" id="navbar">
                 {% if session.user_id %}
-                    logged in
+                     <ul class="navbar-nav ml-auto mt-2">
+                        <li class="nav-item"><a class="nav-link" href="/logout">Log out</a></li>
+                    </ul>
                 {% else %}
                     <ul class="navbar-nav ml-auto mt-2">
                         <li class="nav-item"><a class="nav-link" href="/register">Register</a></li>

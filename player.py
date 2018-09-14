@@ -40,10 +40,13 @@ class Player:
         return cards_to_return
 
     def save(self, database_connection, game_id):
-        """saves the current player's cards"""
+        """saves the current player's gamew state, including registering this player as playing this game"""
         self.persist_player_cards_to_database(self.face_down, database_connection = database_connection, game_id = game_id, deck_type = Card_Types.CARD_FACE_DOWN)
         self.persist_player_cards_to_database(self.face_up, database_connection = database_connection, game_id = game_id, deck_type = Card_Types.CARD_FACE_UP)
         self.persist_player_cards_to_database(self.hand, database_connection = database_connection, game_id = game_id, deck_type = Card_Types.CARD_HAND)
+        database_connection.execute('INSERT OR REPLACE INTO player_game (player_id, game_id) VALUES (:user_id, :game_id)',
+                            user_id= self.ID,
+                            game_id = game_id)
         return
 
     def load(self, database_connection, game_id):

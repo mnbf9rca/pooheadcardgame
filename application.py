@@ -4,7 +4,7 @@ from game import Game
 from player import Player
 
 from cs50 import SQL
-from flask import Flask, flash, redirect, render_template, request, session
+from flask import Flask, flash, redirect, render_template, request, session, url_for
 from flask_session import Session
 from tempfile import mkdtemp
 from werkzeug.exceptions import default_exceptions
@@ -39,10 +39,10 @@ db = SQL("sqlite:///app.db")
 
 @app.route("/")
 def index():
-    #if session["user_id"]:
-     #  return redirect("/logged_in")
-    #else:
-    return render_template("index.html")
+    if session:
+       return redirect("/logged_in")
+    else:
+        return render_template("index.html")
 
 @app.route("/logged_in")
 @login_required
@@ -89,31 +89,21 @@ def play():
     # if no game, start a new one
     if session["game_id"] == None:
         #no game - start one
-        g = Game([1,2])
+        game = Game([1,2])
 
-        g.deal()
+        game.deal()
         #save the game
-        game_id = g.save(db)
+        game_id = game.save(db)
 
         print("game id:" + str(game_id))
-        session["game_id"] = g.game_id
+        session["game_id"] = game.game_id
+        session["game"] = game
+    else:
+        game = session["game"]
 
-        # save player as playing this game
-        result = db.execute('INSERT INTO player_game (player_id, game_id) VALUES (:user_id, :game_id)',
-                            user_id= session["user_id"],
-                            game_id = g.game_id)
+    player = game.players[session["user_id"]]
 
-
-        #now save the cards
-
-
-
-        # save the burn pile
-        # save the played cards
-        # save the deck
-
-
-    return render_template("play.html")
+    return render_template("play.html", game = game, player = player)
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -143,6 +133,7 @@ def login():
         # Remember which user has logged in
         session["user_id"] = rows[0]["player_id"]
         session["game_id"] = None
+        session["game"] = None
 
         # Redirect user to home page
         return redirect("/logged_in")
@@ -155,7 +146,10 @@ def login():
 @app.route("/logout")
 def logout():
     """Log user out"""
-
+    if "game" in session:
+        if session["game"]:
+            g = session["game"]
+            g.save(db)
     # Forget any user_id
     session.clear()
 
@@ -187,18 +181,18 @@ def register():
                           username=request.form.get("username"), password_hash=generate_password_hash(request.form.get("password")))
         if not result:
             return apology("could not register")
-
-        rows = db.execute("SELECT player_id, hash FROM users WHERE username = :username",
-                          username=request.form.get("username"))
-
-        if len(rows) != 1 or not check_password_hash(rows[0]["hash"], request.form.get("password")):
-            return apology("invalid username and/or password", 403)
-
-        # Remember which user has logged in
-        session["user_id"] = rows[0]["player_id"]
+#
+#        rows = db.execute("SELECT player_id, hash FROM users WHERE username = :username",
+#                          username=request.form.get("username"))
+#
+#        if len(rows) != 1 or not check_password_hash(rows[0]["hash"], request.form.get("password")):
+#            return apology("invalid username and/or password", 403)
+#
+#        # Remember which user has logged in
+#        session["user_id"] = rows[0]["player_id"]
 
         # Redirect user to home page
-        return redirect("/")
+        return redirect(url_for('login'))
 
     # User reached route via GET (as by clicking a link or via redirect)
     else:

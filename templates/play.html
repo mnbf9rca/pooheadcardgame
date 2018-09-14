@@ -5,6 +5,18 @@
 {% endblock %}
 
 {% block main %}
-                play page
+            <div>play page - there are {{ game.players|length }} players in this game!</div>
 
+<table>
+    <thead>
+        <tr><th>face down cards</th></tr>
+        <tr><th>face up cards</th></tr>
+        <tr><th>youe hand</th></tr>
+
+    </thead>
+    <tbody>
+    {% for card in player.face_down %}
+        <tr><td>{{ card.describe() }}</td></tr>
+    {% endfor %}
+</table>
 {% endblock %}

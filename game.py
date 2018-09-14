@@ -74,7 +74,7 @@ class Game:
                         last_player = self.last_player)
             self.game_id = result
         else:
-            result = database_connection.execute('UPDATE "games" SET "less_than_card" = :less_than_card, "transparent_card" = :transparent_card, "burn_card" = :burn_card, "reset_card" = :reset_card, "number_of_decks" = :number_of_decks, "number_face_down_cards" = :number_face_down_cards ,"number_hand_cards" = :number_hand_cards,"current_turn_number" = :current_turn_number,"last_player" = :last_player WHERE game_id = :game_id)',
+            result = database_connection.execute('UPDATE "games" SET "less_than_card" = :less_than_card, "transparent_card" = :transparent_card, "burn_card" = :burn_card, "reset_card" = :reset_card, "number_of_decks" = :number_of_decks, "number_face_down_cards" = :number_face_down_cards ,"number_hand_cards" = :number_hand_cards,"current_turn_number" = :current_turn_number,"last_player" = :last_player WHERE gameid = :game_id',
                         less_than_card = self.less_than_card ,
                         transparent_card = self.transparent_card,
                         burn_card = self.burn_card,
@@ -90,9 +90,10 @@ class Game:
         persist_cards_to_database(deck = self.played_cards, deck_type = str(Game.PILE_PLAYED), game_id = str(self.game_id), database_connection = database_connection)
         persist_cards_to_database(deck = self.pick_stack, deck_type = str(Game.PILE_PICK), game_id = str(self.game_id), database_connection = database_connection)
 
+
         for player in self.players:
             player.save(database_connection, self.game_id)
-
+        # return the game_id for future use
         return self.game_id
 
     def load(self, database_connection):
@@ -105,6 +106,6 @@ class Game:
         self.burn_pile = load_cards_from_database(Game.PILE_BURN, self.game_id, database_connection)
         self.played_cards = load_cards_from_database(Game.PILE_PLAYED, self.game_id, database_connection)
         self.pick_stack = load_cards_from_database(Game.PILE_PICK, self.game_id, database_connection)
-        print("loaded config and stack for game ID :" + str(self.game_id))
+        print("loaded config and card stacks for game ID :" + str(self.game_id))
         for player in self.players:
             player.load(database_connection, self.game_id)

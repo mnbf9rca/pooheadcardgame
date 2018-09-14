@@ -21,6 +21,9 @@ class Card:
         self.rank = rank
         self.suit = suit
 
+    def describe(self):
+        return str(self)
+
 
     def __str__(self):
         """Return a description of the card name"""
