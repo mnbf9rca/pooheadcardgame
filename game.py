@@ -148,3 +148,9 @@ class Game:
         for player in self.players:
             player.load(database_connection, self.game_id)
 
+    def swap_cards(self, cards_to_swap, player):
+        """swaps cards in hand with face up"""
+        # TODO
+        # check game state - has this user already committed cards?
+        # if not, then just swap the cards
+        return
