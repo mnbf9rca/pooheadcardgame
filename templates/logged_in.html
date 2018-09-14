@@ -5,6 +5,7 @@
 {% endblock %}
 
 {% block main %}
+                <p class="card-text" id="game-id">Your player ID {{session["user_id"]}}.</p>
                 <div>you're logged in. here's a list of your current games:
                 <table  class="table table-striped">
                     {% for g in games %}
@@ -12,5 +13,5 @@
                     {% endfor %}
                 </table>
                 </div>
-<div>or <a href='/play'>play a new game</a></div>
+<div>or <a href='/play?new=1'>play a new game</a></div>
 {% endblock %}

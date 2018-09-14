@@ -13,22 +13,31 @@ class Card:
 
 
     suits = {1: "hearts", 2: "diamonds", 3: "clubs", 4: "spades" }
+    suits_short = {1:"H", 2: "D", 3: "C", 4: "S"}
     ranks = {2: "two", 3: "three", 4: "four", 5: "five",
             6: "six", 7: "seven", 8: "eight", 9: "nine",
             10: "ten", 11: "jack", 12: "queen", 13: "king", 14: "ace"}
+    rank_short = {10:"T", 11:"J", 12:"Q", 13:"K", 14:"A"}
 
     def __init__(self, suit, rank):
         self.rank = rank
         self.suit = suit
 
     def describe(self):
+        """callable to provide a string description of the card"""
         return str(self)
 
+    def card_key(self):
+        """returns a 2 character key for the card"""
+        card_rank = self.rank
+        if card_rank in Card.rank_short:
+            card_rank = Card.rank_short[card_rank]
+        card_image_name = str(card_rank) + Card.suits_short[self.suit]
+        return card_image_name
 
     def __str__(self):
         """Return a description of the card name"""
         return ((Card.ranks[self.rank]) +  ' of ' + (Card.suits[self.suit]))
-
 
     def __lt__(self, other):
         """less than"""

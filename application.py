@@ -1,4 +1,5 @@
 import os
+import json
 from cards import Card, Deck
 from game import Game
 from player import Player
@@ -82,14 +83,42 @@ def load_game():
 
     return redirect("/play")
 
+@app.route("/playcards")
+@login_required
+def play_cards():
+    # find out the action
+    if session["game"]:
+        game = session["game"]
+        player = session["player"]
+        action = request.args["action"]
+        if action == "Swap":
+            # do something
+            print("starting swap")
+        elif action == "No swap":
+            # player has opted to play without swapping
+            print("starting game without swap")
+            game.players_ready_to_start.append(player.ID)
+            print("ready to start: " + str(game.players_ready_to_start))
+        elif action == "Play":
+            # play these cards
+            print("starting play")
+            # find out which cards were selected
+            selected_cards = request.args.getlist("card")
+
+        game.rotate_player()
+        print("final play order: " + json.dumps(game.play_order))
+        game.save(db)
+
+    return redirect("/play")
+
 
 @app.route("/play")
 @login_required
 def play():
     # if no game, start a new one
-    if session["game_id"] == None:
+    if session["game_id"] == None or request.args.getlist("new"):
         #no game - start one
-        game = Game([1,2])
+        game = Game([int(session["user_id"]),2,3])
 
         game.deal()
         #save the game
@@ -99,9 +128,16 @@ def play():
         session["game_id"] = game.game_id
         session["game"] = game
     else:
+        # take game from session
         game = session["game"]
+        game.load(db)
 
-    player = game.players[session["user_id"]]
+    for players in game.players:
+        if players.ID == session["user_id"]:
+            player = players
+            session["player"] = player
+            break
+
 
     return render_template("play.html", game = game, player = player)
 
