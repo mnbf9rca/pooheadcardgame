@@ -52,11 +52,11 @@ class Card:
 class Deck:
     """defines a deck of playing cards.
        by default a new deck is shuffled but optionally can be empty"""
-    def __init__(self, new_game = True, number_of_decks = 1):
+    def __init__(self, newgame = True, number_of_decks = 1):
         self.cards = []
         self.current = 0
 
-        if (new_game):
+        if (newgame):
             # we're asking for a newly shuffled deck for a new game
             for i in range(number_of_decks):
                 self.cards.extend([Card(s,r) for s in Card.suits for r in Card.ranks])
@@ -81,6 +81,7 @@ class Deck:
 
     def __next__(self):
         if self.current < len(self.cards):
+            self.current = 0
             raise StopIteration
         else:
             card = self.cards[self.current]

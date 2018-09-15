@@ -1,11 +1,12 @@
 import os
 import json
+import jsonpickle
 from cards import Card, Deck
 from game import Game
 from player import Player
 
 from cs50 import SQL
-from flask import Flask, flash, redirect, render_template, request, session, url_for
+from flask import Flask, flash, redirect, render_template, request, session, url_for, jsonify, make_response
 from flask_session import Session
 from tempfile import mkdtemp
 from werkzeug.exceptions import default_exceptions
@@ -69,13 +70,13 @@ def load_game():
     g = Game(players)
     session["game"] = g
 
-    g.game_id = game_id
-    session["game_id"] = g.game_id
+    g.state.game_id = game_id
+    session["game_id"] = g.state.game_id
     g.load(db)
 
     # load the deck
 
-    print("deck loaded - " + str(len(g.deck)) + "cards")
+    print("deck loaded - " + str(len(g.cards.pile_deck)) + "cards")
 
     # load the burn pile
     # load the played cards
@@ -83,22 +84,27 @@ def load_game():
 
     return redirect("/play")
 
-@app.route("/playcards")
+@app.route("/playcards", methods=["POST"])
 @login_required
 def play_cards():
+    #TODO --> need to build the front end to start sending these
     # find out the action
     if session["game"]:
         game = session["game"]
+        game.load(db)
         player = session["player"]
+        request_json = request.get_json()
+
         action = request.args["action"]
+
         if action == "Swap":
             # do something
             print("starting swap")
         elif action == "No swap":
             # player has opted to play without swapping
             print("starting game without swap")
-            game.players_ready_to_start.append(player.ID)
-            print("ready to start: " + str(game.players_ready_to_start))
+            game.state.players_ready_to_start.append(player.ID)
+            print("ready to start: " + str(game.state.players_ready_to_start))
         elif action == "Play":
             # play these cards
             print("starting play")
@@ -106,10 +112,61 @@ def play_cards():
             selected_cards = request.args.getlist("card")
 
         game.rotate_player()
-        print("final play order: " + json.dumps(game.play_order))
+        print("final play order: " + json.dumps(game.state.play_order))
         game.save(db)
 
-    return redirect("/play")
+        return redirect("/play")
+    else:
+        return redirect("/")
+
+@app.route("/getgamestate")
+@login_required
+def getgamestate():
+    """returns a JSON object to caller with a summary of the current state of the game"""
+    game = session["game"]
+    # set default response to indicate no active game
+    game_state= {"active-game":False}
+    players_state = []
+    if game:
+        #always reload in case other users have caused a state change
+        game.load(db)
+        game_state = {'active-game':True,
+                        "state": game.state}
+        #Construct an object which represents the parts of the game that we want to expose to users
+        players_state = []
+        for player in game.players:
+            # check if this is us - if so send our hand, otherwise send empty
+            if player.ID == session["user_id"]:
+                hand_cards = player.hand
+            else:
+                hand_cards = []
+            player_summary = {  'player_id': player.ID,
+                                'number_face_down':len(player.face_down),
+                                'number_face_up':len(player.face_up),
+                                'face_up_cards':player.face_up,
+                                'number_in_hand':len(player.hand),
+                                'hand_cards':hand_cards}
+            players_state.append(player_summary)
+    # construct response
+    total_state = {'game': game_state,
+                    'players_state': players_state}
+
+    resp = make_response(jsonpickle.encode(total_state, unpicklable=False), 200)
+    resp.headers['Content-Type']= 'application/json'
+    return resp
+
+
+@app.route("/game_internals")
+@login_required
+def game_internals():
+    game = session["game"]
+    game_state= {"active-game":False}
+    if game:
+        game_state= {"active-game":True,
+                    'state':game}
+    resp = make_response(jsonpickle.encode(game_state, unpicklable=False), 200)
+    resp.headers['Content-Type']= 'application/json'
+    return resp
 
 
 @app.route("/play")
@@ -118,28 +175,26 @@ def play():
     # if no game, start a new one
     if session["game_id"] == None or request.args.getlist("new"):
         #no game - start one
-        game = Game([int(session["user_id"]),2,3])
+        game = Game([int(session["user_id"]),2])
 
         game.deal()
         #save the game
         game_id = game.save(db)
 
         print("game id:" + str(game_id))
-        session["game_id"] = game.game_id
+        session["game_id"] = game.state.game_id
         session["game"] = game
     else:
         # take game from session
         game = session["game"]
         game.load(db)
 
-    for players in game.players:
-        if players.ID == session["user_id"]:
-            player = players
+    for player in game.players:
+        if player.ID == session["user_id"]:
             session["player"] = player
             break
 
-
-    return render_template("play.html", game = game, player = player)
+    return render_template("play.html", game = game.state, player = player)
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
