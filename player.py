@@ -8,6 +8,19 @@ class Player:
         self.face_up = []
         self.hand = []
 
+    def summarise(self, player_id):
+        # check if this is us - if so send our hand, otherwise send empty
+        hand_cards = []
+        if self.ID == player_id:
+            hand_cards = self.hand
+        player_summary = { 'player_id': self.ID,
+                            'number_face_down':len(self.face_down),
+                            'number_face_up':len(self.face_up),
+                            'face_up_cards':self.face_up,
+                            'number_in_hand':len(self.hand),
+                            'hand_cards':hand_cards}
+        return player_summary
+
     def persist_player_cards_to_database(self, deck = [], *args, database_connection, game_id, deck_type):
         """save a given deck"""
         # clear existing records

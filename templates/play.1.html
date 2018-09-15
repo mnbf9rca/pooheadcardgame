@@ -1,0 +1,121 @@
+{% extends "layout.html" %}
+{% block head %}
+<script src='/static/gameplay.js'></script>
+<script>
+    var form = document.getElementById("play-form");
+
+    document.getElementById("swap").addEventListener("click", function () {
+      form.submit();
+    });
+</script>
+{% endblock %}
+
+{% block title %}
+    Play cards!
+{% endblock %}
+
+{% block main %}
+
+
+<form action='/playcards' id='play-form'>
+<div class="card-group">
+    <div class="card bg-light mb-3" style="max-width: 18rem;">
+      <div class="card-header">Play cards!</div>
+      <div class="card-body">
+        <h5 class="card-title">You are playing a game</h5>
+        <p class="card-text">There are {{ game.number_of_players }} players in this game!</p>
+      </div>
+    </div>
+    <div class="card bg-light mb-3" style="max-width: 18rem;">
+      <div class="card-header">about this game</div>
+      <div class="card-body">
+        <p class="card-text">You have {{player.face_down|length}} face down cards.</p>
+        <p class="card-text">You have {{player.face_up|length}} face up cards.</p>
+        <p class="card-text">You have {{player.hand|length}} cards in your hand.</p>
+      </div>
+    </div>
+    <div class="card bg-light mb-3" style="max-width: 18rem;">
+      <div class="card-header">Turns</div>
+      <div class="card-body">
+        <p class="card-text" id="game-id">This is game ID {{game.game_id}}.</p>
+        <p class="card-text" id="jq-id">This is a test of jquery.</p>
+        <p class="card-text" id="player-id">Your player ID {{session["user_id"]}}; play order is currently {{game.play_order}}.</p>
+        {% if not player.ID in game.players_ready_to_start %}
+        <p class="card-text" id="ready-to-play">You are able to swap cards</p>
+        {% elif game.players_ready_to_start|length != game.number_of_players %}
+        <p class="card-text" id="ready-to-play">You are waiting for others to swap cards (only {{game.players_ready_to_start|length}} have done so).</p>
+        {% elif game.play_order[0] == player.ID %}
+        <p class="card-text" id="turn-info">It is your turn now.</p>
+        {% else %}
+        <p class="card-text" id="turn-info">The next turn is for player {{game.play_order[0]}}.</p>
+        {% endif %}
+      </div>
+    </div>
+</div>
+
+<div class="container">
+    <div class="row">
+        <div class="card">
+            <div class="card-head">
+                <h5 class="card-title">Face down cards</h5>
+            </div>
+            <div class="card">
+                <div class="card-deck">
+                    {% for card in player.face_down %}
+                    <div class="card" id='face-down-{{loop.index0}}'>
+                         <div class="card-img-top"><img width="30%" height="30%" alt='{{ card.describe() }}' src='/static/cards/1B.svg'/> </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="card">
+            <div class="card-head">
+                <h5 class="card-title">Face up cards</h5>
+            </div>
+            <div class="card">
+                <div class="card-deck">
+                    {% for card in player.face_up %}
+                    <div class="card" id='card-face-up-{{loop.index0}}'>
+                        <div class="card-img-top"><img width="30%" height="30%" alt='{{ card.describe() }}' src='/static/cards/{{card.card_key()}}.svg'/> </div>
+                        <div class="card-body"><input type="checkbox" disabled name="card" value='face-up-{{loop.index0}}'/>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="card">
+            <div class="card-head">
+                <h5 class="card-title">Hand</h5>
+            </div>
+            <div class="card">
+                <div class="card-columns">
+                    {% for card in player.hand %}
+                    <div class="card" id='card-hand-{{loop.index0}}'>
+                        <div class="card-img-top">
+                             <img width="30%" height="30%" alt='{{ card.describe() }}' src='/static/cards/{{card.card_key()}}.svg'/>
+                        </div>
+                        <div class="card-body"><input type="checkbox" name="card" value='hand-{{loop.index0}}'/></div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+    {% if ( (game.current_turn_number == 0) and
+            (not player.ID in game.players_ready_to_start)): %}
+            <input type="submit" name="action" value="Swap">
+            <input type="submit" name="action" value="No swap">
+    {% elif (game.players_ready_to_start|length == game.numer_of_players):%}
+        <input type="submit" name="action" value="Play">
+    {% endif %}
+</form>
+
+
+{% endblock %}

@@ -28,6 +28,7 @@ class Game(object):
         def __init__(self, player_IDs):
             self.number_of_players = len(player_IDs)
             self.play_order = player_IDs
+            self.this_player_id = None
             #game config
             self.game_id = None
             self.less_than_card = 7
@@ -49,6 +50,8 @@ class Game(object):
             self.pile_played_size = 0
             self.pile_deck_size = 0
 
+
+
     class Cards(object):
         """stores cards separately from state to keep secret from client"""
         def __init__(self):
@@ -58,9 +61,10 @@ class Game(object):
             self.pile_played = []
             self.pile_deck = []
 
-    def __init__(self, player_IDs = []):
+    def __init__(self, this_player_id, player_IDs = []):
         self.state = self.State(player_IDs)
         self.cards = self.Cards()
+        self.state.this_player_id = this_player_id
         #players
 
         self.players = []
@@ -155,6 +159,8 @@ class Game(object):
             raise ValueError('tried to load game without setting game_id.')
         if not len(self.players) > 0:
             raise ValueError('tried to load game without setting player IDs.')
+        if not self.state.this_player_id:
+            raise ValueError('tried to load game without setting ID of current player and it doesnt exist in current instantiation.')
 
         # load game config
         config = database_connection.execute('SELECT "play_order","last_player_id","less_than_card","transparent_card","burn_card","reset_card","number_of_decks","number_face_down_cards","number_hand_cards","current_turn_number","last_player", "players_ready_to_start" FROM games WHERE gameid = :game_id',

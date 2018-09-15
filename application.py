@@ -67,7 +67,7 @@ def load_game():
 
     players = get_users_for_game(game_id, db)
     print("players loaded: " + str(players))
-    g = Game(players)
+    g = Game(session["user_id"], players)
     session["game"] = g
 
     g.state.game_id = game_id
@@ -119,6 +119,7 @@ def play_cards():
     else:
         return redirect("/")
 
+
 @app.route("/getgamestate")
 @login_required
 def getgamestate():
@@ -127,26 +128,17 @@ def getgamestate():
     # set default response to indicate no active game
     game_state= {"active-game":False}
     players_state = []
+    # if we have an active game, use that
     if game:
         #always reload in case other users have caused a state change
         game.load(db)
         game_state = {'active-game':True,
                         "state": game.state}
         #Construct an object which represents the parts of the game that we want to expose to users
-        players_state = []
         for player in game.players:
-            # check if this is us - if so send our hand, otherwise send empty
-            if player.ID == session["user_id"]:
-                hand_cards = player.hand
-            else:
-                hand_cards = []
-            player_summary = {  'player_id': player.ID,
-                                'number_face_down':len(player.face_down),
-                                'number_face_up':len(player.face_up),
-                                'face_up_cards':player.face_up,
-                                'number_in_hand':len(player.hand),
-                                'hand_cards':hand_cards}
-            players_state.append(player_summary)
+
+            players_state.append( player.summarise(session["user_id"]) )
+    print(jsonpickle.encode(players_state, unpicklable=False))
     # construct response
     total_state = {'game': game_state,
                     'players_state': players_state}
@@ -175,7 +167,7 @@ def play():
     # if no game, start a new one
     if session["game_id"] == None or request.args.getlist("new"):
         #no game - start one
-        game = Game([int(session["user_id"]),2])
+        game = Game(session["user_id"], [int(session["user_id"]),2])
 
         game.deal()
         #save the game
@@ -190,11 +182,13 @@ def play():
         game.load(db)
 
     for player in game.players:
+        userid = session["user_id"]
+        print(f'player {player.ID} session {userid}')
         if player.ID == session["user_id"]:
             session["player"] = player
             break
 
-    return render_template("play.html", game = game.state, player = player)
+    return render_template("play.html")
 
 @app.route("/login", methods=["GET", "POST"])
 def login():

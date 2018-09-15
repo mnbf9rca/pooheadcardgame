@@ -12,8 +12,8 @@ class Card:
     """defines a playing card"""
 
 
-    suits = {1: "hearts", 2: "diamonds", 3: "clubs", 4: "spades" }
-    suits_short = {1:"H", 2: "D", 3: "C", 4: "S"}
+    suits = {0: "back", 1: "hearts", 2: "diamonds", 3: "clubs", 4: "spades" }
+    suits_short = {0: "B", 1:"H", 2: "D", 3: "C", 4: "S"}
     ranks = {2: "two", 3: "three", 4: "four", 5: "five",
             6: "six", 7: "seven", 8: "eight", 9: "nine",
             10: "ten", 11: "jack", 12: "queen", 13: "king", 14: "ace"}
@@ -22,6 +22,9 @@ class Card:
     def __init__(self, suit, rank):
         self.rank = rank
         self.suit = suit
+
+    def __hash__(self):
+        return(hash(str(self)))
 
     def describe(self):
         """callable to provide a string description of the card"""
