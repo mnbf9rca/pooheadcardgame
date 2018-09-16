@@ -1,6 +1,5 @@
 from cards import Card, Deck
 from player import Player
-from game_helpers import persist_cards_to_database, get_users_for_game, load_cards_from_database
 import json
 
 class Game(object):
@@ -132,10 +131,10 @@ class Game(object):
                         last_player = self.state.last_player,
                         game_id = self.state.game_id,
                         players_ready_to_start = json.dumps(self.state.players_ready_to_start))
-        persist_cards_to_database(deck = self.cards.pile_deck, deck_type = str(Game.PILE_DECK), game_id = str(self.state.game_id), database_connection = database_connection)
-        persist_cards_to_database(deck = self.cards.pile_burn, deck_type = str(Game.PILE_BURN), game_id = str(self.state.game_id), database_connection = database_connection)
-        persist_cards_to_database(deck = self.cards.pile_played, deck_type = str(Game.PILE_PLAYED), game_id = str(self.state.game_id), database_connection = database_connection)
-        persist_cards_to_database(deck = self.cards.pile_pick, deck_type = str(Game.PILE_PICK), game_id = str(self.state.game_id), database_connection = database_connection)
+        self.__persist_cards_to_database(deck = self.cards.pile_deck, deck_type = str(Game.PILE_DECK), game_id = str(self.state.game_id), database_connection = database_connection)
+        self.__persist_cards_to_database(deck = self.cards.pile_burn, deck_type = str(Game.PILE_BURN), game_id = str(self.state.game_id), database_connection = database_connection)
+        self.__persist_cards_to_database(deck = self.cards.pile_played, deck_type = str(Game.PILE_PLAYED), game_id = str(self.state.game_id), database_connection = database_connection)
+        self.__persist_cards_to_database(deck = self.cards.pile_pick, deck_type = str(Game.PILE_PICK), game_id = str(self.state.game_id), database_connection = database_connection)
 
 
         for player in self.players:
@@ -180,10 +179,10 @@ class Game(object):
         print("ready to start: " + str(self.state.players_ready_to_start))
 
         # load decks
-        self.cards.pile_deck = load_cards_from_database(Game.PILE_DECK, self.state.game_id, database_connection)
-        self.cards.pile_burn = load_cards_from_database(Game.PILE_BURN, self.state.game_id, database_connection)
-        self.cards.pile_played = load_cards_from_database(Game.PILE_PLAYED, self.state.game_id, database_connection)
-        self.cards.pile_pick = load_cards_from_database(Game.PILE_PICK, self.state.game_id, database_connection)
+        self.cards.pile_deck = self.__load_cards_from_database(Game.PILE_DECK, self.state.game_id, database_connection)
+        self.cards.pile_burn = self.__load_cards_from_database(Game.PILE_BURN, self.state.game_id, database_connection)
+        self.cards.pile_played = self.__load_cards_from_database(Game.PILE_PLAYED, self.state.game_id, database_connection)
+        self.cards.pile_pick = self.__load_cards_from_database(Game.PILE_PICK, self.state.game_id, database_connection)
         self.__update_pile_sizes()
 
         print("loaded config and card stacks for game ID :" + str(self.state.game_id))
@@ -234,3 +233,39 @@ class Game(object):
         # check game state - has this user already committed cards?
         # if not, then just swap the cards
         return
+
+
+    def __load_cards_from_database(self, deck_type, game_id, database_connection):
+        """load a set of cards and return them in a sorted list"""
+        cards = database_connection.execute("SELECT card_suit, card_rank FROM game_cards WHERE game_id = :game_id AND card_location = :deck_type ORDER BY card_sequence ASC",
+                game_id = game_id, deck_type = deck_type)
+        cards_to_return = []
+        if len(cards) > 0:
+            cards_to_return.extend([Card(card["card_suit"],card["card_rank"]) for card in cards])
+        return cards_to_return
+
+    def __persist_cards_to_database(self, deck = [], *args, deck_type, game_id, database_connection):
+        """persist a set of cards to the database as part of game state"""
+        if len(deck) > 0:
+            i = 0
+            for card in deck:
+                    print(str(card) + " at position " + str(i))
+                    result = database_connection.execute("INSERT INTO game_cards (game_id, card_location, card_suit, card_rank, card_sequence) VALUES (:game_id, :deck_type, :card_suit, :card_rank, :i)",
+                                                            game_id = game_id,
+                                                            deck_type = deck_type,
+                                                            card_suit = card.suit,
+                                                            card_rank = card.rank,
+                                                            i = i)
+                    if not result:
+                        return False
+                    i += 1
+        return True
+
+def get_users_for_game(game_id, database_connection):
+    """load the list of users playing a game"""
+    players = database_connection.execute("SELECT player_id FROM player_game WHERE game_id = :game_id",
+                                            game_id=game_id)
+    list_of_players = []
+    if len(players) > 0:
+        list_of_players.extend([player["player_id"] for player in players])
+    return list_of_players
