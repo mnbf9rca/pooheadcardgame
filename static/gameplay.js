@@ -2,54 +2,7 @@ $(document).ready(function(){
     $.getJSON("/getgamestate", function(result){
 
         if (result.game["active-game"]){
-            var state = result.game.state;
-            console.log("state", JSON.stringify(state))
-            $('#jq-id').text('There is an active game');
-            // find our player ID
-            var this_player_id = state.this_player_id;
-            var this_player = null;
-
-            $('#player-id').html('You are player ' + this_player_id + '. There are ' + state["number_of_players"] +  ' players in this game.');
-            var player_state = result.players_state;
-
-            number_of_columns = state.number_of_players % 12
-
-            for (var i = 0; i < player_state.length; i++){
-
-                current_player = player_state[i];
-                if (current_player.player_id == this_player_id){
-                    this_player = current_player
-                }
-
-                face_down_cards = new Array(current_player.number_face_down);
-                for (var a = 0; a < face_down_cards.length; a++) {
-                    face_down_cards[a] = {"rank":1,"suit":0};
-                }
-
-                face_down_cards = lay_out_cards(face_down_cards,"d",current_player.player_id)
-                face_up_cards = lay_out_cards(current_player.face_up_cards, "f", current_player.player_id)
-                hand_cards = lay_out_cards(current_player.hand_cards, "h", current_player.player_id)
-
-
-                $('#game-row').append("<div class='col' id='player" + current_player.player_id.toString() + "'>Player " + current_player.player_id.toString() + " with face up cards " + face_down_cards + face_up_cards + hand_cards + "</div>")
-
-
-            }
-
-            // populate game rules
-            game_rules="<p class='card-text'>Burn card: " + check_card(state.burn_card) +"</p>"
-            game_rules+="<p class='card-text'>Less than card: " + check_card(state.less_than_card) +"</p>"
-            game_rules+="<p class='card-text'>Reset card: " + check_card(state.reset_card) +"</p>"
-            game_rules+="<p class='card-text'>Transparent card: " + check_card(state.transparent_card) +"</p>";
-            game_rules+="<p class='card-text'>Cards you can play on anything: " + check_card(state.play_on_anything_cards) +"</p>"
-            $('#game-rules').append(game_rules);
-
-            $('#face-down-count').html('You have ' + this_player["number_face_down"] + ' face down cards.');
-            $('#face-up-count').html('You have ' + this_player["number_face_up"] + ' face up cards.');
-            $('#hand-count').html('You have ' + this_player["number_in_hand"] + ' cards in your hand.');
-
-
-
+            render_game(result);
         } else {
             $('#jq-id').text('There is NO active game');
         }
@@ -58,10 +11,57 @@ $(document).ready(function(){
 
 
 });
+function render_game(result){
+    var state = result.game.state;
+    console.log("state", JSON.stringify(state))
+
+    $('#jq-id').text('There is an active game');
+    // find our player ID
+    var this_player_id = state.this_player_id;
+
+    $('#player-id').html('You are player ' + this_player_id + '. There are ' + state["number_of_players"] +  ' players in this game.');
+
+    number_of_columns = state.number_of_players % 12
+
+    // display player cards and return the current player's state as the return value
+    var this_player = disaply_player_cards(result.players_state, this_player_id);
+    display_game_rules(state);
+    display_data_about_player(this_player);
+}
+
+function disaply_player_cards(player_state, this_player_id) {
+    for (var i = 0; i < player_state.length; i++) {
+        current_player = player_state[i];
+        if (current_player.player_id == this_player_id) {
+            this_player = current_player;
+        }
+        face_down_cards = lay_out_cards(current_player.face_down_cards, "d", current_player.player_id);
+        face_up_cards = lay_out_cards(current_player.face_up_cards, "f", current_player.player_id);
+        hand_cards = lay_out_cards(current_player.hand_cards, "h", current_player.player_id);
+        $('#game-row').append("<div class='col' id='player" + current_player.player_id.toString() + "'>Player " + current_player.player_id.toString() + " with face up cards " + face_down_cards + face_up_cards + hand_cards + "</div>");
+    }
+    return this_player;
+}
+
+function display_data_about_player(player){
+    $('#face-down-count').html('You have ' + player["number_face_down"] + ' face down cards.');
+    $('#face-up-count').html('You have ' + player["number_face_up"] + ' face up cards.');
+    $('#hand-count').html('You have ' + player["number_in_hand"] + ' cards in your hand.');
+}
+
+function display_game_rules(state){
+                // populate game rules
+                game_rules="<p class='card-text'>Burn card: " + check_card(state.burn_card) +"</p>"
+                game_rules+="<p class='card-text'>Less than card: " + check_card(state.less_than_card) +"</p>"
+                game_rules+="<p class='card-text'>Reset card: " + check_card(state.reset_card) +"</p>"
+                game_rules+="<p class='card-text'>Transparent card: " + check_card(state.transparent_card) +"</p>";
+                game_rules+="<p class='card-text'>Cards you can play on anything: " + check_card(state.play_on_anything_cards) +"</p>"
+                $('#game-rules').append(game_rules);
+}
 
 function check_card(card_to_check){
     if (card_to_check){
-        return card_to_check
+        return (card_to_check)
     } else {
         return "none"
     }
