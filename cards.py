@@ -12,7 +12,7 @@ class Card:
     """defines a playing card"""
 
 
-    suits = {0: "back", 1: "hearts", 2: "diamonds", 3: "clubs", 4: "spades" }
+    suits = {1: "hearts", 2: "diamonds", 3: "clubs", 4: "spades" }
     suits_short = {0: "B", 1:"H", 2: "D", 3: "C", 4: "S"}
     ranks = {2: "two", 3: "three", 4: "four", 5: "five",
             6: "six", 7: "seven", 8: "eight", 9: "nine",

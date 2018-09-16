@@ -1,0 +1,11 @@
+game states
+0 no game
+1 started, dealt, no-one has swapped
+2 this player has swapped, others havent
+3 everyone has swapped, this player to move
+4 everyone has swapped, waiting for others to move
+
+within 3
+if has hand cards, use hand cards
+if no hand cards but has face up cards, use face up cards
+if no hand cards and no face up cards, use face down cards

@@ -112,7 +112,7 @@
       };
   
       ImagePicker.prototype.create_picker = function() {
-        this.picker = jQuery("<ul class='thumbnails image_picker_selector'></ul>");
+        this.picker = jQuery("<div class='card-group thumbnails image_picker_selector'></div>");
         this.picker_options = [];
         this.recursively_parse_option_groups(this.select, this.picker);
         return this.picker;
@@ -125,8 +125,8 @@
           option_group = ref[j];
           option_group = jQuery(option_group);
           container = jQuery("<ul></ul>");
-          container.append(jQuery("<li class='group_title'>" + (option_group.attr("label")) + "</li>"));
-          target_container.append(jQuery("<li class='group'>").append(container));
+          container.append(jQuery("<li class='card-title group_title'>" + (option_group.attr("label")) + "</li>"));
+          target_container.append(jQuery("<li class='card-group'>").append(container));
           this.recursively_parse_option_groups(option_group, container);
         }
         ref1 = (function() {
@@ -281,10 +281,10 @@
           image = jQuery("<i>");
           image.attr("class", "fa-fw " + this.option.data("img-src"));
         } else {
-          image = jQuery("<img class='image_picker_image'/>");
+          image = jQuery("<img class='card image_picker_image'/>");
           image.attr("src", this.option.data("img-src"));
         }
-        thumbnail = jQuery("<div class='thumbnail'>");
+        thumbnail = jQuery("<div class='card thumbnail'>");
         imgClass = this.option.data("img-class");
         if (imgClass) {
           this.node.addClass(imgClass);

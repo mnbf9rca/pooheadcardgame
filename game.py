@@ -21,6 +21,8 @@ class Game(object):
         PILE_PLAYED : "self.cards.pile_played_size",
         PILE_BURN : "self.cards.pile_burn_size"
     }
+    
+    this_player = None
 
     class State(object):
         """holds the current state of this game, excluding player hands and config"""
@@ -38,6 +40,7 @@ class Game(object):
             self.number_face_down_cards = 3
             self.number_hand_cards = 7
             self.players_ready_to_start = []
+            self.players_finished = []
             self.play_on_anything_cards = [2, 10]
 
             # game state
@@ -102,35 +105,29 @@ class Game(object):
         """saves the current state of the game. If this is a new game without an ID, it creates one, otherwise it updates the existing one"""
         play_order = []
         if not self.state.game_id:
-            result = database_connection.execute("INSERT INTO games (play_on_anything_cards, play_order, less_than_card, transparent_card, burn_card, reset_card, number_of_decks, number_face_down_cards, number_hand_cards, current_turn_number, last_player, players_ready_to_start, last_player_id, gameid) VALUES (:play_on_anything_cards,:play_order,:less_than_card,:transparent_card,:burn_card,:reset_card,:number_of_decks,:number_face_down_cards,:number_hand_cards,:current_turn_number,:last_player,:players_ready_to_start, NULL, NULL)",
-                        play_on_anything_cards = json.dumps(self.state.play_on_anything_cards),
-                        play_order = json.dumps(self.state.play_order),
-                        less_than_card = self.state.less_than_card,
-                        transparent_card = self.state.transparent_card,
-                        burn_card = self.state.burn_card,
-                        reset_card = self.state.reset_card,
-                        number_of_decks = self.state.number_of_decks,
-                        number_face_down_cards = self.state.number_face_down_cards,
-                        number_hand_cards = self.state.number_hand_cards,
-                        current_turn_number = self.state.current_turn_number,
-                        last_player = self.state.last_player,
-                        players_ready_to_start = json.dumps(self.state.players_ready_to_start))
-            self.state.game_id = result
+            querystring = "INSERT INTO games (players_finished, play_on_anything_cards, play_order, less_than_card, transparent_card, burn_card, reset_card, number_of_decks, number_face_down_cards, number_hand_cards, current_turn_number, last_player, players_ready_to_start, last_player_id, gameid) VALUES (:players_finished, :play_on_anything_cards,:play_order,:less_than_card,:transparent_card,:burn_card,:reset_card,:number_of_decks,:number_face_down_cards,:number_hand_cards,:current_turn_number,:last_player,:players_ready_to_start, NULL, :game_id)"
+
         else:
-            result = database_connection.execute("UPDATE games SET play_on_anything_cards = :play_on_anything_cards, play_order = :play_order, less_than_card = :less_than_card, transparent_card = :transparent_card, burn_card = :burn_card, reset_card = :reset_card, number_of_decks = :number_of_decks, number_face_down_cards = :number_face_down_cards ,number_hand_cards = :number_hand_cards,current_turn_number = :current_turn_number,last_player = :last_player, players_ready_to_start = :players_ready_to_start WHERE gameid = :game_id",
-                        play_on_anything_cards = json.dumps(self.state.play_on_anything_cards),
-                        play_order = json.dumps(self.state.play_order),
-                        less_than_card = self.state.less_than_card ,
-                        transparent_card = self.state.transparent_card,
-                        burn_card = self.state.burn_card,
-                        reset_card = self.state.reset_card,
-                        number_of_decks = self.state.number_of_decks,
-                        number_face_down_cards = self.state.number_face_down_cards,
-                        number_hand_cards = self.state.number_hand_cards,
-                        current_turn_number = self.state.current_turn_number,
-                        last_player = self.state.last_player,
-                        game_id = self.state.game_id,
-                        players_ready_to_start = json.dumps(self.state.players_ready_to_start))
+            querystring = "UPDATE games SET players_finished = :players_finished, play_on_anything_cards = :play_on_anything_cards, play_order = :play_order, less_than_card = :less_than_card, transparent_card = :transparent_card, burn_card = :burn_card, reset_card = :reset_card, number_of_decks = :number_of_decks, number_face_down_cards = :number_face_down_cards ,number_hand_cards = :number_hand_cards,current_turn_number = :current_turn_number,last_player = :last_player, players_ready_to_start = :players_ready_to_start WHERE gameid = :game_id"
+
+        result = database_connection.execute(querystring,
+                    players_finished = json.dumps(self.state.players_finished),
+                    play_on_anything_cards = json.dumps(self.state.play_on_anything_cards),
+                    play_order = json.dumps(self.state.play_order),
+                    less_than_card = self.state.less_than_card ,
+                    transparent_card = self.state.transparent_card,
+                    burn_card = self.state.burn_card,
+                    reset_card = self.state.reset_card,
+                    number_of_decks = self.state.number_of_decks,
+                    number_face_down_cards = self.state.number_face_down_cards,
+                    number_hand_cards = self.state.number_hand_cards,
+                    current_turn_number = self.state.current_turn_number,
+                    last_player = self.state.last_player,
+                    game_id = self.state.game_id,
+                    players_ready_to_start = json.dumps(self.state.players_ready_to_start))
+ 
+        if not(self.state.game_id): self.state.game_id = result
+        
         self.__persist_cards_to_database(deck = self.cards.pile_deck, deck_type = str(Game.PILE_DECK), game_id = str(self.state.game_id), database_connection = database_connection)
         self.__persist_cards_to_database(deck = self.cards.pile_burn, deck_type = str(Game.PILE_BURN), game_id = str(self.state.game_id), database_connection = database_connection)
         self.__persist_cards_to_database(deck = self.cards.pile_played, deck_type = str(Game.PILE_PLAYED), game_id = str(self.state.game_id), database_connection = database_connection)
@@ -139,6 +136,9 @@ class Game(object):
 
         for player in self.players:
             player.save(database_connection, self.state.game_id)
+            # store a reference to this player's object on the game itself
+            if player.ID == self.state.this_player_id: self.this_player = player
+    
         # return the game_id for future use
         return self.state.game_id
 
@@ -162,9 +162,10 @@ class Game(object):
             raise ValueError('tried to load game without setting ID of current player and it doesnt exist in current instantiation.')
 
         # load game config
-        config = database_connection.execute('SELECT "play_order","last_player_id","less_than_card","transparent_card","burn_card","reset_card","number_of_decks","number_face_down_cards","number_hand_cards","current_turn_number","last_player", "players_ready_to_start" FROM games WHERE gameid = :game_id',
+        config = database_connection.execute('SELECT "players_finished", "play_order","last_player_id","less_than_card","transparent_card","burn_card","reset_card","number_of_decks","number_face_down_cards","number_hand_cards","current_turn_number","last_player", "players_ready_to_start" FROM games WHERE gameid = :game_id',
                         game_id = self.state.game_id)
         config = config[0]
+        self.state.players_finished = json.loads(config["players_finished"])
         self.state.play_order = json.loads(config["play_order"])
         self.state.less_than_card = config["less_than_card"]
         self.state.transparent_card = config["transparent_card"]
@@ -188,25 +189,44 @@ class Game(object):
         print("loaded config and card stacks for game ID :" + str(self.state.game_id))
         for player in self.players:
             player.load(database_connection, self.state.game_id)
+            # store a reference to this player's object on the game itself
+            if player.ID == self.state.this_player_id: self.this_player = player
 
     def __update_pile_sizes(self):
         self.state.pile_pick_size = len(self.cards.pile_pick)
         self.state.pile_played_size = len(self.cards.pile_played)
         self.state.pile_burn_size = len(self.cards.pile_burn)
         self.state.pile_deck_size = len(self.cards.pile_deck)
+    
+    def calculate_player_allowed_actions(self):
+        if len(self.state.players_ready_to_start) < len(self.players):
+            # still some players waiting to swap
+            # https://www.geeksforgeeks.org/python-difference-two-lists/
+            allowed_players = (list(set(player.ID for player in self.players) - set(self.state.players_ready_to_start)))
+            response = {"allowed_action":"swap", "allowed_players":allowed_players}
+        elif (self.state.this_player_id == self.state.play_order[0] and 
+                self.this_player.hand and 
+                self.this_player.face_down and 
+                self.this_player.face_up):
+            # this player is the next player
+            # work out which cards i can use
+
+            if self.this_player.hand:
+                # have hand cards left, so allow them to play them
+                cards_to_play = "h"
+            elif self.this_player.face_up:
+                # have face up cards
+                card_to_play = "f"
+            elif self.this_player.face_down:
+                card_to_play = "d"
+            response = {"allowed_action":"play", "allowed_cards":cards_to_play}
+
+        
+        return response
+
 
     def add_to_pile(self, deck_type, cards_to_add = [], *args):
         """add card to pile and update size"""
-#        pile_object = self.Pile_Objects.get(deck_type, None)
-#        if not pile_object:
-#            raise ValueError(f'cant find object name for {deck_type}.')
-#        pile_count = self.Pile_Counts.get(deck_type, None)
-#        if not pile_count:
-#            raise ValueError(f'cant find pile size object for {deck_type}.')
-
-#        deck = getattr(self, pile_object)
-#        deck.extend(cards_to_add)
-#        pile_count = len(deck)
         if not cards_to_add:
             raise ValueError('tried to add a card to pile without a card.')
 

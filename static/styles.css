@@ -1,3 +1,7 @@
+.half-size {
+    max-width: 50%;
+}
+
 nav .navbar-brand
 {
     /* size for brand */

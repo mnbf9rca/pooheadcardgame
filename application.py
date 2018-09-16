@@ -130,20 +130,24 @@ def getgamestate():
     # set default response to indicate no active game
     game_state= {"active-game":False}
     players_state = []
+    allowed_moves = []
     # if we have an active game, use that
     if game:
         #always reload in case other users have caused a state change
         game.load(db)
         game_state = {'active-game':True,
                         "state": game.state}
+        # calculate the allowed moves at this stage of teh game for this player
+        allowed_moves  = game.calculate_player_allowed_actions()
         #Construct an object which represents the parts of the game that we want to expose to users
         for player in game.players:
-
             players_state.append( player.summarise(session["user_id"]) )
     print(jsonpickle.encode(players_state, unpicklable=False))
     # construct response
-    total_state = {'game': game_state,
+    total_state = { 'game': game_state,
+                    'allowed_moves' : allowed_moves,
                     'players_state': players_state}
+    print("total_state_", total_state)
 
     resp = make_response(jsonpickle.encode(total_state, unpicklable=False), 200)
     resp.headers['Content-Type']= 'application/json'
