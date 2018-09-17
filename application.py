@@ -92,32 +92,43 @@ def play_cards():
     #TODO --> need to build the front end to start sending these
     # find out the action
     if session["game"]:
+
         game = session["game"]
         game.load(db)
         player = session["player"]
-        request_json = request.get_json()
+        print("game loaded")
+        print("request.is_json", request.is_json)
+        request_json = request.get_json(cache=False)
+        print("request_json", request_json)
+        response = ""
 
-        action = request.args["action"]
 
-        if action == "Swap":
-            # do something
+        action = request_json["action"]
+
+        if action == "swap":
+            # check if we're allowed to swap cards
+            response = game.swap_cards(request_json["action_cards"], player)
             print("starting swap")
-        elif action == "No swap":
+        elif action == "no_swap":
             # player has opted to play without swapping
             print("starting game without swap")
             game.state.players_ready_to_start.append(player.ID)
+
             print("ready to start: " + str(game.state.players_ready_to_start))
-        elif action == "Play":
+            response = {'action':'no_swap', 'action_result':True}
+        elif action == "play":
             # play these cards
             print("starting play")
             # find out which cards were selected
-            selected_cards = request.args.getlist("card")
+            selected_cards = request_json["action_cards"]
+            response = {'action':'play', 'action_result':True}
 
         game.rotate_player()
-        print("final play order: " + json.dumps(game.state.play_order))
-        game.save(db)
 
-        return redirect("/play")
+        game.save(db)
+        print("saved game")
+
+        return json.dumps(response)
     else:
         return redirect("/")
 

@@ -1,6 +1,6 @@
 from cards import Card, Deck
 from player import Player
-import json
+import json, jsonpickle
 
 class Game(object):
     PILE_BURN = 1
@@ -21,7 +21,7 @@ class Game(object):
         PILE_PLAYED : "self.cards.pile_played_size",
         PILE_BURN : "self.cards.pile_burn_size"
     }
-    
+
     this_player = None
 
     class State(object):
@@ -125,20 +125,24 @@ class Game(object):
                     last_player = self.state.last_player,
                     game_id = self.state.game_id,
                     players_ready_to_start = json.dumps(self.state.players_ready_to_start))
- 
+
         if not(self.state.game_id): self.state.game_id = result
-        
-        self.__persist_cards_to_database(deck = self.cards.pile_deck, deck_type = str(Game.PILE_DECK), game_id = str(self.state.game_id), database_connection = database_connection)
-        self.__persist_cards_to_database(deck = self.cards.pile_burn, deck_type = str(Game.PILE_BURN), game_id = str(self.state.game_id), database_connection = database_connection)
-        self.__persist_cards_to_database(deck = self.cards.pile_played, deck_type = str(Game.PILE_PLAYED), game_id = str(self.state.game_id), database_connection = database_connection)
-        self.__persist_cards_to_database(deck = self.cards.pile_pick, deck_type = str(Game.PILE_PICK), game_id = str(self.state.game_id), database_connection = database_connection)
+
+        if not self.__persist_cards_to_database(deck = self.cards.pile_deck, deck_type = str(Game.PILE_DECK), game_id = str(self.state.game_id), database_connection = database_connection):
+            raise ValueError('error persisting Game.PILE_DECK to database')
+        if not self.__persist_cards_to_database(deck = self.cards.pile_burn, deck_type = str(Game.PILE_BURN), game_id = str(self.state.game_id), database_connection = database_connection):
+            raise ValueError('error persisting Game.PILE_BURN to database')
+        if not self.__persist_cards_to_database(deck = self.cards.pile_played, deck_type = str(Game.PILE_PLAYED), game_id = str(self.state.game_id), database_connection = database_connection):
+            raise ValueError('error persisting Game.PILE_PLAYED to database')
+        if not self.__persist_cards_to_database(deck = self.cards.pile_pick, deck_type = str(Game.PILE_PICK), game_id = str(self.state.game_id), database_connection = database_connection):
+            raise ValueError('error persisting Game.PILE_PICK to database')
 
 
         for player in self.players:
             player.save(database_connection, self.state.game_id)
             # store a reference to this player's object on the game itself
             if player.ID == self.state.this_player_id: self.this_player = player
-    
+
         # return the game_id for future use
         return self.state.game_id
 
@@ -197,16 +201,16 @@ class Game(object):
         self.state.pile_played_size = len(self.cards.pile_played)
         self.state.pile_burn_size = len(self.cards.pile_burn)
         self.state.pile_deck_size = len(self.cards.pile_deck)
-    
+
     def calculate_player_allowed_actions(self):
         if len(self.state.players_ready_to_start) < len(self.players):
             # still some players waiting to swap
             # https://www.geeksforgeeks.org/python-difference-two-lists/
             allowed_players = (list(set(player.ID for player in self.players) - set(self.state.players_ready_to_start)))
             response = {"allowed_action":"swap", "allowed_players":allowed_players}
-        elif (self.state.this_player_id == self.state.play_order[0] and 
-                self.this_player.hand and 
-                self.this_player.face_down and 
+        elif (self.state.this_player_id == self.state.play_order[0] and
+                self.this_player.hand and
+                self.this_player.face_down and
                 self.this_player.face_up):
             # this player is the next player
             # work out which cards i can use
@@ -219,9 +223,11 @@ class Game(object):
                 card_to_play = "f"
             elif self.this_player.face_down:
                 card_to_play = "d"
-            response = {"allowed_action":"play", "allowed_cards":cards_to_play}
+            allowed_players = (list(set(player.ID for player in self.players) - set(self.state.players_finished)))
 
-        
+            response = {"allowed_action":"play", "allowed_cards":cards_to_play, "allowed_players": allowed_players}
+
+
         return response
 
 
@@ -252,7 +258,38 @@ class Game(object):
         # TODO
         # check game state - has this user already committed cards?
         # if not, then just swap the cards
-        return
+        response = None
+        if not player.ID in self.state.players_ready_to_start:
+            print("ready to swap")
+            hand_cards = []
+            face_cards = []
+            for card in cards_to_swap:
+                index = int(card[2:])
+                print("index", index)
+                if card[0] == 'f':
+                    # face card
+                    face_cards.append(index)
+                elif card[0] == 'h':
+                    # hand card
+                    hand_cards.append(index)
+                else:
+                    response = {'action':'swap', 'action_result':False, 'action_message':'You can only swap hand and face up cards.'}
+                    return response
+
+            if len(hand_cards) != len(face_cards):
+                response = {'action':'swap', 'action_result':False, 'action_message':'You must select the same number of cards from your hand and face up sets.'}
+
+            else:
+                print("len hand", len(hand_cards), "len face", len(face_cards))
+                for i in range(len(hand_cards)):
+                     player.hand[hand_cards[i]], player.face_up[face_cards[i]] = player.face_up[face_cards[i]], player.hand[hand_cards[i]]
+
+                response = {'action':'swap', 'action_result':True}
+
+        else:
+            response= {'action':'swap', 'action_result':False, 'action_message':'You can\'t swap cards right now'}
+
+        return response
 
 
     def __load_cards_from_database(self, deck_type, game_id, database_connection):
@@ -266,7 +303,12 @@ class Game(object):
 
     def __persist_cards_to_database(self, deck = [], *args, deck_type, game_id, database_connection):
         """persist a set of cards to the database as part of game state"""
+        # first, clear all cards of this type for this game
+        result = database_connection.execute("DELETE FROM game_cards WHERE card_location=:card_type AND game_id = :game_id",
+                                    card_type = deck_type,
+                                    game_id = game_id)
         if len(deck) > 0:
+
             i = 0
             for card in deck:
                     print(str(card) + " at position " + str(i))
