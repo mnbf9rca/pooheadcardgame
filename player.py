@@ -31,16 +31,22 @@ class Player:
                                             player_id = self.ID,
                                             card_type = deck_type,
                                             game_id = game_id)
+        # if not result == None:
+        #     raise ValueError(f"error clearing cards for game_id '{game_id}' and player_id '{self.ID}' and card_type '{deck_type}' to database")
+
         # persist each card
         i = 0
         for card in deck:
-            database_connection.execute("INSERT INTO player_game_cards (player_id, game_id, card_type, card_suit, card_rank, card_sequence) VALUES (:player_id, :game_id, :card_type, :card_suit, :card_rank, :card_sequence)",
-                                            player_id = self.ID,
-                                            game_id = game_id,
-                                            card_type = deck_type,
-                                            card_suit = card.suit,
-                                            card_rank = card.rank,
-                                            card_sequence = i)
+
+            result = database_connection.execute("INSERT INTO player_game_cards (player_id, game_id, card_type, card_suit, card_rank, card_sequence) VALUES (:player_id, :game_id, :card_type, :card_suit, :card_rank, :card_sequence)",
+                                                    player_id = self.ID,
+                                                    game_id = game_id,
+                                                    card_type = deck_type,
+                                                    card_suit = card.suit,
+                                                    card_rank = card.rank,
+                                                    card_sequence = i)
+            if not(result):
+                raise ValueError(f"error persisting cards for game_id '{game_id}' and player_id '{self.ID}' and card_type '{deck_type}' and card_suit '{card.suit}' and card_rank '{card.rank}' at sequence '{i}' to database")
             i += 1
 
     def load_player_cards(self, database_connection, game_id, deck_type):
