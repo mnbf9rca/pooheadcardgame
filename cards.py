@@ -26,6 +26,9 @@ class Card:
     def __hash__(self):
         return(hash(str(self)))
 
+    def same_rank(self, other):
+        return self.rank == other.rank
+
     def describe(self):
         """callable to provide a string description of the card"""
         return str(self)
