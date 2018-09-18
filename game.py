@@ -103,7 +103,7 @@ class Game(object):
 
     def save(self, database_connection):
         """saves the current state of the game. If this is a new game without an ID, it creates one, otherwise it updates the existing one"""
-        play_order = []
+        
         if not self.state.game_id:
             querystring = "INSERT INTO games (players_finished, play_on_anything_cards, play_order, less_than_card, transparent_card, burn_card, reset_card, number_of_decks, number_face_down_cards, number_hand_cards, current_turn_number, last_player, players_ready_to_start, last_player_id, gameid) VALUES (:players_finished, :play_on_anything_cards,:play_order,:less_than_card,:transparent_card,:burn_card,:reset_card,:number_of_decks,:number_face_down_cards,:number_hand_cards,:current_turn_number,:last_player,:players_ready_to_start, NULL, :game_id)"
 
@@ -216,9 +216,9 @@ class Game(object):
                 cards_to_play = "h"
             elif self.this_player.face_up:
                 # have face up cards
-                card_to_play = "f"
+                cards_to_play = "f"
             elif self.this_player.face_down:
-                card_to_play = "d"
+                cards_to_play = "d"
             response = {"allowed_action":"play", "allowed_cards":cards_to_play}
 
         
