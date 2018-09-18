@@ -93,40 +93,65 @@ def play_cards():
     # find out the action
     if session["game"]:
 
-        game = session["game"]
-        game.load(db)
-        player = session["player"]
+
         print("game loaded")
-        print("request.is_json", request.is_json)
-        request_json = request.get_json(cache=False)
-        print("request_json", request_json)
-        response = ""
+        if not request.is_json:
+            response = {'action':'unknown', 'action_result':False}
+        else:
+            request_json = request.get_json(cache=False)
 
+            # first, let's get the action and respond with a failure if we can't.
+            try:
+                action = request_json["action"]
+            except KeyError as e:
+                response = {'action':'unknown', 'action_result':False, 'action_message':"no action specified"}
+                return json.dumps(response)
+            except IndexError as e:
+                response = {'action':'unknown', 'action_result':False, 'action_message':"no action specified"}
+                return json.dumps(response)
+            # now set this as default action in case it fails to match any action below
+            response = {'action':action, 'action_result':False, 'action_message':"unknown action " + action}
 
-        action = request_json["action"]
+            # at least we've got a candidate action - let's reload the game state
+            game = session["game"]
+            game.load(db)
+            player = session["player"]
 
-        if action == "swap":
-            # check if we're allowed to swap cards
-            response = game.swap_cards(request_json["action_cards"], player)
-            print("starting swap")
-        elif action == "no_swap":
-            # player has opted to play without swapping
-            print("starting game without swap")
-            game.state.players_ready_to_start.append(player.ID)
+            if action == "swap":
+                # check if we're allowed to swap cards
+                # check if we've been given any action cards
+                try:
+                    cards = request_json["action_cards"]
+                except KeyError as e:
+                    response = {'action':action, 'action_result':False, 'action_message':"no cards specified"}
+                    return json.dumps(response)
 
-            print("ready to start: " + str(game.state.players_ready_to_start))
-            response = {'action':'no_swap', 'action_result':True}
-        elif action == "play":
-            # play these cards
-            print("starting play")
-            # find out which cards were selected
-            selected_cards = request_json["action_cards"]
-            response = {'action':'play', 'action_result':True}
+                # all ok - submit to game
+                response = game.swap_cards(cards, player)
+                print("starting swap")
+            elif action == "no_swap":
+                # player has opted to play without swapping
+                print("starting game without swap")
+                game.state.players_ready_to_start.append(player.ID)
+                print("ready to start: " + str(game.state.players_ready_to_start))
+                response = {'action':'no_swap', 'action_result':True}
+            elif action == "play":
+                # play these cards
+                print("starting play")
+                try:
+                    cards = request_json["action_cards"]
+                except KeyError as e:
+                    response = {'action':action, 'action_result':False, 'action_message':"no cards specified"}
+                    return json.dumps(response)
+                # find out which cards were selected
+                response = game.play_move(cards, player)
+                # if response["action_result"]:
+                #     game.rotate_player()
 
-        game.rotate_player()
-
-        game.save(db)
-        print("saved game")
+            if response["action_result"]:
+                # if any of the items above report success, save state
+                game.save(db)
+                print("saved game")
 
         return json.dumps(response)
     else:
@@ -184,7 +209,7 @@ def play():
     # if no game, start a new one
     if session["game_id"] == None or request.args.getlist("new"):
         #no game - start one
-        game = Game(session["user_id"], [int(session["user_id"]),2])
+        game = Game(session["user_id"], [int(session["user_id"]),3])
 
         game.deal()
         #save the game

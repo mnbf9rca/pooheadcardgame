@@ -10,7 +10,8 @@ $(document).ready(function(){
 });
 
 $.postJSON = function(url, data, success, dataType) {
-    // from https://gist.github.com/padcom/1557142/7ebb6a9c632f02ecb10a57e18340c5eae86b251e
+    // modified from https://gist.github.com/padcom/1557142/7ebb6a9c632f02ecb10a57e18340c5eae86b251e
+
 	if (typeof data != 'string') {
 		data = JSON.stringify(data);
 	}
@@ -45,7 +46,7 @@ function submit_action(action){
         }
         case "play":{
             console.log("play")
-            identify_selected_cards()
+            json_request = {"action":"play", "action_cards":identify_selected_cards()}
             break;
         }
         case "refresh":{
@@ -59,9 +60,9 @@ function submit_action(action){
                 update_game_state()
             } else {
                 // got an error back. Shoudl be in action_message
-                action_message = data.action_message
-                div = '<div class="alert alert-danger" role="alert" id="alert-pane">' + action_message + '</div>'
-                 $('#ready-to-play-info').append(div)
+
+                display_alert(data.action_message, "alert-danger")
+
             }
 
         }, 'json')
@@ -84,6 +85,16 @@ function identify_selected_cards(){
 
 }
 
+function display_alert(alert_message, alert_class = "alert-primary"){
+    $("#alert-pane").remove()
+    var div = document.createElement("div")
+    div.setAttribute("id","alert-pane")
+    div.className = "alert " + alert_class
+    var newContent = document.createTextNode(alert_message)
+    div.appendChild(newContent)
+    $('#ready-to-play-info').append(div)
+}
+
 
 function update_game_state(){
     $.getJSON("/getgamestate", function(result){
@@ -98,8 +109,6 @@ function update_game_state(){
     });
 }
 
-
-
 function render_game(result){
     var state = result.game.state;
     var players_state = result.players_state;
@@ -109,7 +118,7 @@ function render_game(result){
     // find our player ID
     var this_player_id = state.this_player_id;
 
-    $('#player-id').html('You are player ' + this_player_id + '. There are ' + state["number_of_players"] +  ' players in this game.');
+    $('#player-id').html('You are player ' + this_player_id + '. There are ' + state["number_of_players"] +  ' players in this game. The next player is player with ID ' + state["play_order"][0]);
 
     number_of_columns = state.number_of_players % 12
 
@@ -137,11 +146,20 @@ function display_players(players_state, this_player_id, allowed_moves){
 }
 
 function display_player_cards(current_player, allowed_moves) {
-    face_down_cards = lay_out_cards(current_player.face_down_cards, "d", current_player.player_id, allowed_moves);
-    face_up_cards = lay_out_cards(current_player.face_up_cards, "f", current_player.player_id, allowed_moves);
-    hand_cards = lay_out_cards(current_player.hand_cards, "h", current_player.player_id, allowed_moves);
+    game_row = $('#game-row')
 
-    $('#game-row').append("<div class='col' id='player" + current_player.player_id.toString() + "'>Player " + current_player.player_id.toString() + " with face up cards " + face_down_cards + face_up_cards + hand_cards + "</div>");
+    this_player_div = document.createElement("div")
+    this_player_div.className="col"
+    this_player_div.setAttribute("id","player" + current_player.player_id.toString())
+    header = document.createTextNode("Player " + current_player.player_id.toString())
+    this_player_div.appendChild(header)
+    this_player_div.appendChild(lay_out_cards(current_player.face_down_cards, "d", current_player.player_id, allowed_moves))
+    this_player_div.appendChild(lay_out_cards(current_player.face_up_cards, "f", current_player.player_id, allowed_moves))
+    this_player_div.appendChild(lay_out_cards(current_player.hand_cards, "h", current_player.player_id, allowed_moves))
+
+
+    game_row.append(this_player_div)
+
     $("select").imagepicker()
     return;
 }
@@ -157,35 +175,36 @@ function lay_out_cards(cards, card_type, player_id, allowed_moves){
                 // allow the user to select only the type of card(s) they can play
                 allowed_cards = allowed_moves.allowed_cards;
                 if (allowed_cards ==  card_type){
-                    return_value = lay_out_cards_with_selector(cards, card_type, player_id)
+                    return_value = lay_out_cards_div(cards, card_type, player_id,true)
                 }
                 else {
-                    return_value = lay_out_cards_without_selector(cards, card_type, player_id)
+                    return_value = lay_out_cards_div(cards, card_type, player_id)
                 }
                 add_action_button("Play");
+                add_action_button("refresh", clear_existing = false);
                 break;
             }
             case "swap":{
-                if (player_id in allowed_moves.allowed_players){
+                console.log("player_id", player_id, "allowed_moves.allowed_players", allowed_moves.allowed_players, "allowed_moves.allowed_players.includes(player_id", allowed_moves.allowed_players.includes(player_id))
+                if (allowed_moves.allowed_players.includes(player_id)){
                     // let them pick hand and face up cards
                     if (card_type == "h" || card_type == "f"){
-                        return_value=lay_out_cards_with_selector(cards, card_type, player_id)
+                        return_value=lay_out_cards_div(cards, card_type, player_id, true)
                     }
                     else {
-                        return_value=lay_out_cards_without_selector(cards, card_type, player_id)
+                        return_value=lay_out_cards_div(cards, card_type, player_id)
                     }
                     add_action_button("Swap");
                     add_action_button("Ready", clear_existing = false);
+                    add_action_button("refresh", clear_existing = false);
 
                 } else {
                     // they're not in the allowed list
 
-                    return_value = lay_out_cards_without_selector(cards, card_type, player_id)
+                    return_value = lay_out_cards_div(cards, card_type, player_id)
 
                     add_action_button("refresh");
-                     div = '<div class="alert alert-primary" role="alert" id="alert-pane">Currently waiting for the other play to be ready. Try refreshing.</div>'
-                    $('#ready-to-play-info').append(div)
-
+                    display_alert("Waiting for other users to be ready. Try refreshing.")
                 }
                 break;
             }
@@ -200,55 +219,86 @@ function lay_out_cards(cards, card_type, player_id, allowed_moves){
     }
     else
     {
-        return lay_out_cards_without_selector(cards, card_type, player_id)
+        return lay_out_cards_div(cards, card_type, player_id)
     }
 
 }
 
 function add_action_button(button_text, clear_existing = true){
     if (clear_existing) {$('#ready-to-play-info').empty();}
+
     $div = $('<div data-role="fieldcontain"/>');
     $("<input type='button' value='" + button_text + "' id='action_button' />").appendTo($div.clone()).appendTo('#ready-to-play-info');
 }
 
-function lay_out_cards_with_selector(cards, card_type, player_id){
-    var card_response = "<div class='card' id='p"+ player_id.toString() + "face'>";
-    card_response += "<div class='card-header'>" + card_types[card_type] + "</div>"
-    card_response += "<div class='card-group'>"
-    card_response += "<select multiple='multiple' class='image-picker show-html' id='picker-" + card_type + "'>"
-    if (cards){
-        for (j = 0; j < cards.length; j++){
-            card = cards[j]
-            suit = card.suit;
-            rank = card.rank;
 
-            card_response += "<option data-img-class='card' data-img-src='/static/cards/" + get_card_key(suit, rank) +".svg' value='" + card_type + "-" + j.toString() + "' data-img-alt='" + describe_card(suit, rank) + "'>" + describe_card(suit, rank) + "</option>\n";
-           //  card_response += "<div id='p" + player_id.toString() + "f" + j.toString() + "'>" + get_card_key(rank, suit) + "</div>"
+
+function lay_out_cards_div(cards, card_type, player_id, with_selector = false){
+    var card_div = document.createElement("div")
+    card_div.className = "card"
+    card_div.setAttribute("id", card_type.toString() + "p" + player_id.toString())
+    card_div.className="card"
+
+    var child_div = document.createElement("div")
+    child_div.className="card-header"
+    child_div.appendChild(document.createTextNode(card_types[card_type]))
+    card_div.append(child_div)
+
+
+    if(cards){
+        if(with_selector){
+            select = document.createElement("select")
+            select.setAttribute("multiple", "multiple")
+            select.className = "image-picker show-html"
+            select.setAttribute("id","picker-" + card_type)
+            for (j = 0; j < cards.length; j++){
+                card = cards[j]
+                suit = card.suit;
+                rank = card.rank;
+                option = document.createElement("option")
+                option.setAttribute("data-img-class","card")
+                option.setAttribute("data-img-src","/static/cards/" + get_card_key(suit, rank) +".svg")
+                option.setAttribute("data-img-alt", describe_card(suit, rank))
+                option.setAttribute("value", card_type + "-" + j.toString())
+                select.append(option)
+
+            }
+            card_div.append(select)
+        }
+        else
+        {
+
+            child_div = document.createElement("div")
+            child_div.className="card-group"
+
+            for (j = 0; j < cards.length; j++){
+                card = cards[j]
+                suit = card.suit;
+                rank = card.rank;
+
+
+                var img = document.createElement("img")
+                img.setAttribute("alt", describe_card(suit, rank))
+                img.setAttribute("src", "/static/cards/" + get_card_key(suit, rank) +".svg")
+
+                var card_img=document.createElement("div")
+                card_img.className="card-img-top"
+                card_img.appendChild(img)
+                var this_card_div=document.createElement("div")
+                this_card_div.className="card"
+                this_card_div.appendChild(card_img)
+
+                child_div.appendChild(this_card_div)
+                // card_response += "<div class='card'><div class='card-img-top'><img alt='" + describe_card(suit, rank) + "' src='/static/cards/" + get_card_key(suit, rank) +".svg'/></div></div>";
+
+            }
+            card_div.append(child_div)
         }
     }
-    card_response +="</select></div>"
-    return card_response;
+    return card_div;
 
 }
 
-function lay_out_cards_without_selector(cards, card_type, player_id){
-    var card_response = "<div class='card' id='p"+ player_id.toString() + "face'>";
-
-    card_response += "<div class='card-header'>" + card_types[card_type] + "</div>"
-    card_response += "<div class='card-group'>"
-    if (cards){
-        for (j = 0; j < cards.length; j++){
-            card = cards[j]
-            suit = card.suit;
-            rank = card.rank;
-            card_response += "<div class='card'><div class='card-img-top'><img alt='" + describe_card(suit, rank) + "' src='/static/cards/" + get_card_key(suit, rank) +".svg'/></div></div>";
-           //  card_response += "<div id='p" + player_id.toString() + "f" + j.toString() + "'>" + get_card_key(rank, suit) + "</div>"
-        }
-    }
-    card_response +="</div></div>"
-    return card_response;
-
-}
 function display_data_about_player(player){
     $('#face-down-count').html('You have ' + player["number_face_down"] + ' face down cards.');
     $('#face-up-count').html('You have ' + player["number_face_up"] + ' face up cards.');

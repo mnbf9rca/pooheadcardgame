@@ -252,39 +252,109 @@ class Game(object):
             raise ValueError(f'cant find pile for {deck_type}.')
         return
 
+    def play_move(self, cards_to_play, player):
+        """ plays a given move"""
+        # check game state
+        # 1. is "play" a valid move?
+        # 2. is it this player's turn?
+
+        response = None
+        # play
+        allowed_actions = self.calculate_player_allowed_actions()
+        if (allowed_actions["allowed_action"] == "play" and
+            player.ID in allowed_actions["allowed_players"]):
+                if cards_to_play:
+                    # validate that these cards are in this user's hand
+                    validated_card_indexes = []
+                    card_type = ""
+                    for card in cards_to_play:
+                        index = int(card[2:])
+                        print("index", index)
+                        allowed_cards = allowed_actions["allowed_cards"]
+                        card_type = card[0]
+                        if card_type != allowed_cards:
+                            response = {'action':'play', 'action_result':False, 'action_message':f'You can only play cards of type {allowed_cards} but you sent card of type {card_type}'}
+                            return response
+                        message = self.__check_card_index_not_over_deck_length(index, card_type, player)
+                        if message:
+                            response = {'action':'play', 'action_result':False, 'action_message':message}
+                            return response
+                        validated_card_indexes.append(index)
+                    # now check they're all the same
+
+                    response = {'action':'play', 'action_result':True}
+                else:
+                    response = {'action':'play', 'action_result':False, 'action_message':"Select one or more cards to play"}
+        else:
+            response = {'action':'play', 'action_result':False, 'action_message':"You are not allowed to play right now"}
+
+        return response
+
+    def __check_card_index_not_over_deck_length(self, card_index, card_type, player):
+        if card_type == "f":
+            deck = player.face_up
+        elif card_type == "d":
+            deck = player.face_down
+        elif card_type == "h":
+            deck = player.hand
+        else:
+            message = f'unknown card type {card_type}.'
+            return  message
+
+        if (card_index > len(deck) - 1):
+            message = f'Attempted to play card {card_index} which is above face card count {len(deck) - 1}.'
+            return message
+        else:
+            return None
 
     def swap_cards(self, cards_to_swap, player):
         """swaps cards in hand with face up"""
-        # TODO
         # check game state - has this user already committed cards?
         # if not, then just swap the cards
         response = None
-        if not player.ID in self.state.players_ready_to_start:
-            print("ready to swap")
-            hand_cards = []
-            face_cards = []
-            for card in cards_to_swap:
-                index = int(card[2:])
-                print("index", index)
-                if card[0] == 'f':
-                    # face card
-                    face_cards.append(index)
-                elif card[0] == 'h':
-                    # hand card
-                    hand_cards.append(index)
+        # if not player.ID in self.state.players_ready_to_start:
+
+        allowed_actions = self.calculate_player_allowed_actions()
+        if (allowed_actions["allowed_action"] == "swap" and
+            player.ID in allowed_actions["allowed_players"]):
+
+                print("ready to swap")
+                hand_cards = []
+                face_cards = []
+                for card in cards_to_swap:
+                    index = int(card[2:])
+                    print("index", index)
+                    card_type = card[0]
+
+                    if card_type == 'f':
+                        # face card
+                        message = self.__check_card_index_not_over_deck_length(index, card_type, player)
+                        if message:
+                            response = {'action':'swap', 'action_result':False, 'action_message':message}
+                            return response
+                        face_cards.append(index)
+                    elif card_type == 'h':
+                        # hand card
+                        message = self.__check_card_index_not_over_deck_length(index, card_type, player)
+
+                        if message:
+                            response = {'action':'swap', 'action_result':False, 'action_message':message}
+                            return response
+                        hand_cards.append(index)
+                    else:
+                        response = {'action':'swap', 'action_result':False, 'action_message':'You can only swap hand and face up cards.'}
+                        return response
+
+                if len(hand_cards) != len(face_cards):
+                    response = {'action':'swap', 'action_result':False, 'action_message':'You must select the same number of cards from your hand and face up sets.'}
+                elif len(hand_cards) <= 0:
+                    response = {'action':'swap', 'action_result':False, 'action_message':'Select the face up and hand cards you want to swap.'}
                 else:
-                    response = {'action':'swap', 'action_result':False, 'action_message':'You can only swap hand and face up cards.'}
-                    return response
+                    print("len hand", len(hand_cards), "len face", len(face_cards))
+                    for i in range(len(hand_cards)):
+                         player.hand[hand_cards[i]], player.face_up[face_cards[i]] = player.face_up[face_cards[i]], player.hand[hand_cards[i]]
 
-            if len(hand_cards) != len(face_cards):
-                response = {'action':'swap', 'action_result':False, 'action_message':'You must select the same number of cards from your hand and face up sets.'}
-
-            else:
-                print("len hand", len(hand_cards), "len face", len(face_cards))
-                for i in range(len(hand_cards)):
-                     player.hand[hand_cards[i]], player.face_up[face_cards[i]] = player.face_up[face_cards[i]], player.hand[hand_cards[i]]
-
-                response = {'action':'swap', 'action_result':True}
+                    response = {'action':'swap', 'action_result':True}
 
         else:
             response= {'action':'swap', 'action_result':False, 'action_message':'You can\'t swap cards right now'}
