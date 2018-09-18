@@ -222,16 +222,11 @@ class Game(object):
                 # have face up cards
                 cards_to_play = "f"
             elif self.this_player.face_down:
-<<<<<<< HEAD
-                cards_to_play = "d"
-            response = {"allowed_action":"play", "allowed_cards":cards_to_play}
-=======
                 card_to_play = "d"
             allowed_players = (list(set(player.ID for player in self.players) - set(self.state.players_finished)))
 
             response = {"allowed_action":"play", "allowed_cards":cards_to_play, "allowed_players": allowed_players}
 
->>>>>>> f2d78f2a6b48f6f4ae025e70f45b4b84b94aaa22
 
         return response
 
