@@ -215,6 +215,13 @@ function lay_out_cards(cards, card_type, player_id, allowed_moves, number_in_han
                 }
                 break;
             }
+            case "wait":{
+                console.log("player_id", player_id, "allowed_moves.allowed_players", allowed_moves.allowed_players, "allowed_moves.allowed_players.includes(player_id", allowed_moves.allowed_players.includes(player_id))
+                return_value = lay_out_cards_div(cards, card_type, player_id)
+
+                add_action_button("refresh");
+                display_alert("You've finished. Waiting for others to finish too.")
+            }
             default:{
                 console.log("unrecognised allowed_moves.allowed_action")
             }
@@ -342,7 +349,6 @@ function display_game_cards(game_state) {
 
 function lay_out_game_cards(number_of_cards, card_type, card_list = null){
     var card_div = document.createElement("div")
-    card_div.className = "card"
     card_div.setAttribute("id", "deck-" + card_type.toString())
     card_div.className="card"
 
@@ -358,11 +364,11 @@ function lay_out_game_cards(number_of_cards, card_type, card_list = null){
             child_div = document.createElement("div")
             //child_div.className="card-group"
             child_div.className="flex-div"
-            max_cards = Math.max(number_of_cards - 5, 0)
+            max_cards = Math.max(number_of_cards - 4, 0)
             for (i = number_of_cards-1, j=0; i >= max_cards; i--){
                 var card_header = document.createElement("div")
                 // card_header.className="card-header"
-                card_header.className="flex-card-20"
+                //card_header.className="flex-card-20"
                 card_header.appendChild(document.createTextNode((j--).toString()))
                 card = card_list[i]
                 suit = card.suit;
@@ -375,7 +381,7 @@ function lay_out_game_cards(number_of_cards, card_type, card_list = null){
                 card_img.className="card-img-top"
                 card_img.appendChild(img)
                 var this_card_div=document.createElement("div")
-                this_card_div.className="card"
+                this_card_div.className="flex-card"
                 this_card_div.append(card_header)
                 this_card_div.appendChild(card_img)
 

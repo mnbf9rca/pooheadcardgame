@@ -201,6 +201,7 @@ class Game(object):
         self.state.pile_played_size = len(self.cards.pile_played)
         self.state.pile_burn_size = len(self.cards.pile_burn)
         self.state.pile_deck_size = len(self.cards.pile_deck)
+        self.state.play_list = self.cards.pile_played
 
     def calculate_player_allowed_actions(self):
         response = {"allowed_action":"unknown", "allowed_players":"unknown"}
@@ -211,10 +212,9 @@ class Game(object):
             # https://www.geeksforgeeks.org/python-difference-two-lists/
             allowed_players = (list(set(player.ID for player in self.players) - set(self.state.players_ready_to_start)))
             response = {"allowed_action":"swap", "allowed_players":allowed_players}
-        elif (self.state.this_player_id in self.state.play_order and
-                (self.this_player.hand or
+        elif (self.this_player.hand or
                 self.this_player.face_down or
-                self.this_player.face_up)):
+                self.this_player.face_up):
             # this player is the next player
             # and this player still has cards
             # work out which cards i can use
@@ -244,7 +244,18 @@ class Game(object):
                         "allowed_cards":Card_Types.Short_Name[cards_to_play],
                         "allowed_players": allowed_players,
                         "is_next_player" : is_next_player}
-
+        else:
+            # this player has no cards left
+            # see if they're on their own
+            allowed_players = (list(set(player.ID for player in self.players) - set(self.state.players_finished)))
+            if not allowed_players:
+                # all done!
+                response = {"allowed_action": "finished",
+                            "action-message": "Game over!"}
+            else:
+                response = {"allowed_action": "wait",
+                            "allowed_players": allowed_players,
+                            "is_next_player" : False}
 
         return response
 
@@ -280,33 +291,125 @@ class Game(object):
         # play
         allowed_actions = self.calculate_player_allowed_actions()
         if (allowed_actions["allowed_action"] == "play" and
-            player.ID in allowed_actions["allowed_players"]):
+            allowed_actions["is_next_player"]):
                 if cards_to_play:
                     # validate that these cards are in this user's hand
                     validated_card_indexes = []
                     card_type = ""
                     for card_description in cards_to_play:
-                        index = int(card_description[2:])
-                        print("index", index)
+                        card_index = int(card_description[2:])
+                        print("card_index", card_index, "card_description", card_description)
                         allowed_cards = allowed_actions["allowed_cards"]
                         card_type = card_description[0]
                         if card_type != allowed_cards:
                             response = {'action':'play', 'action_result':False, 'action_message':f'You can only play cards of type {allowed_cards} but you sent card of type {card_type}'}
                             return response
-                        message = self.__check_card_index_not_over_deck_length(index, Card_Types.Get_Code[card_type], player)
+                        message = self.__check_card_index_not_over_deck_length(card_index, Card_Types.Get_Code[card_type], player)
                         if message:
                             response = {'action':'play', 'action_result':False, 'action_message':message}
                             return response
-                        validated_card_indexes.append(index)
+                        validated_card_indexes.append(card_index)
+                    card_dict = []
+                    card_type = Card_Types.Get_Code[card_type]
+                    print("card_type", card_type)
+                    if card_type == Card_Types.CARD_HAND:
+                        card_dict = player.hand
+                        print("card_dict", jsonpickle.dumps(card_dict))
+                    elif card_type == Card_Types.CARD_FACE_DOWN:
+                        card_dict = player.face_down
+                    elif card_type == Card_Types.CARD_FACE_UP:
+                        card_dict = player.face_up 
+                    validated_cards = list(card_dict[card_location] for card_location in validated_card_indexes)
+
+                    # check if all cards are the same rank:
+                    if not self.__are_all_cards_same_rank(validated_cards):
+                        result = {'action':'play', 'action_result':False, 'action_message':f'If playing more than one card, they must all be the same rank (value).'}
+                        return result
+
+                    if self.__can_play_cards(validated_cards):
+                        # great - play teh cards!
+                        self.cards.pile_played.extend(validated_cards)
+                        # remove these cards from teh player's hand/hidden/up cards and refill their hand if there are cards left in teh deck
+                        if card_type == Card_Types.CARD_HAND:
+                            player.hand = (list(set(player.hand) - set(validated_cards)))
+                            while (len(player.hand) < self.state.number_hand_cards and
+                                len(self.cards.pile_deck) > 0):
+                                player.hand.append(self.cards.pile_deck.pop())
+                        elif card_type == Card_Types.CARD_FACE_UP:
+                            player.face_up = (list(set(player.face_up) - set(validated_cards)))
+                        if card_type == Card_Types.CARD_FACE_DOWN:
+                            player.face_down = (list(set(player.face_down) - set(validated_cards)))
+                        
+                        # check if last move clears the deck
+                        clears_deck =  self.__clears_deck(self.cards.pile_played)
+                        print("clears_deck", clears_deck)
+                        if clears_deck:
+                            played = self.cards.pile_played
+                            self.cards.pile_burn.extend(played)
+                            self.cards.pile_played = []
+                        else:
+                            self.rotate_player()
+                        self.__update_pile_sizes()
+                        if not player.face_down:
+                            # have run out of cards
+                            self.state.players_finished.append(player.ID)
+
+                        response = {'action':'play', 'action_result':True}
+                    else:
+                        if card_type == Card_Types.CARD_FACE_DOWN:
+                            # tried to play a face down card but lost
+                            player.hand = validated_cards
+                            response = {'action':'play', 'action_result':True, 'action_message': 'playing down cards not yet implemented'}
+                        else:
+                            response = {'action':'play', 'action_result':False, 'action_message':f'Cannot play that move on the current stack'}
+                        self.__update_pile_sizes()
+                        return response
+
                     # now check they're all the same
 
                     response = {'action':'play', 'action_result':True}
                 else:
                     response = {'action':'play', 'action_result':False, 'action_message':"Select one or more cards to play"}
         else:
-            response = {'action':'play', 'action_result':False, 'action_message':"You are not allowed to play right now"}
+            response = {'action':'play', 'action_result':False, 'action_message':"You are not allowed to play right now (waiting for other?)"}
 
         return response
+    def __clears_deck(self, played_pile):
+        all_match = False
+        if len(played_pile) > 3:
+            pile_played = played_pile[-4:]
+            print("card1", pile_played[0], "card2", pile_played[1], "card3", pile_played[2], "card4", pile_played[3])
+            all_match= (pile_played[0].rank == pile_played[1].rank) and (pile_played[1].rank == pile_played[2].rank) and (pile_played[2].rank == pile_played[3].rank)
+        print("self.cards.pile_played[0].rank", self.cards.pile_played[0].rank, "self.state.burn_card", self.state.burn_card)
+        return ((self.cards.pile_played[-1].rank == self.state.burn_card) or
+                all_match)
+
+    def __are_all_cards_same_rank(self, cards):
+        # now check they're all the same         
+        last_card = None
+        for card in cards:
+            if last_card:
+                if not card.rank == last_card.rank:
+                    return False
+            last_card = card
+        return True
+
+    def __can_play_cards(self, cards):
+        print("cards", jsonpickle.dumps(cards))
+        card = cards[0]
+        if not self.cards.pile_played:
+            return True
+        elif card.rank in self.state.play_on_anything_cards:
+            return True
+        else:
+            last_played_card = self.cards.pile_played[-1]
+            rest_of_played_cards = self.cards.pile_played[0:-1]
+            if last_played_card.rank == self.state.transparent_card:
+                return self.__can_play_cards(rest_of_played_cards)
+            elif last_played_card.rank == self.state.less_than_card:
+                return card.rank <= last_played_card.rank
+            else:
+                return card.rank >= last_played_card.rank
 
     def __check_card_index_not_over_deck_length(self, card_index, card_type, player):
         if card_type == Card_Types.CARD_FACE_UP:

@@ -5,6 +5,9 @@ game states
 3 everyone has swapped, this player to move
 4 everyone has swapped, waiting for others to move
 
+within 1:
+
+
 within 3
 if has hand cards, use hand cards
 if no hand cards but has face up cards, use face up cards
