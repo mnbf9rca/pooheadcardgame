@@ -4,9 +4,21 @@ class Card_Types:
     CARD_FACE_DOWN = 1
     CARD_FACE_UP = 2
     CARD_HAND = 3
+    Long_Name = {CARD_FACE_DOWN:"face down",
+                 CARD_FACE_UP:"face up",
+                 CARD_HAND:"hand"}
+    Short_Name= {CARD_FACE_DOWN:"d",
+                 CARD_FACE_UP:"f",
+                 CARD_HAND:"h"}
+    Get_Code =  {"d":CARD_FACE_DOWN,
+                 "f":CARD_FACE_UP,
+                 "h":CARD_HAND}
+
 
     def __init__(self):
+        Get_Code = dict((v, k) for k, v in self.Short_Name)
         return
+
 
 class Card:
     """defines a playing card"""
