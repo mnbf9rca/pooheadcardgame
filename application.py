@@ -258,7 +258,7 @@ def login():
 
         # Query database for username
         rows = db.execute("SELECT player_id, hash FROM users WHERE username = :username",
-                          username=request.form.get("username"))
+                          username=request.form.get("username").lower())
 
         # Ensure username exists and password is correct
         if len(rows) != 1 or not check_password_hash(rows[0]["hash"], request.form.get("password")):
@@ -311,19 +311,17 @@ def register():
             return apology("passwords must match", 400)
 
         # Query database for username
+        rows = db.execute("SELECT player_id, hash FROM users WHERE username = :username",
+                          username=request.form.get("username"))
+        
+        if len(rows) != 0:
+            return apology("username already taken, sorry")
+
         result = db.execute("INSERT INTO users (username, hash) VALUES (:username, :password_hash)",
-                          username=request.form.get("username"), password_hash=generate_password_hash(request.form.get("password")))
+                          username=request.form.get("username").lower(), password_hash=generate_password_hash(request.form.get("password")))
         if not result:
             return apology("could not register")
-#
-#        rows = db.execute("SELECT player_id, hash FROM users WHERE username = :username",
-#                          username=request.form.get("username"))
-#
-#        if len(rows) != 1 or not check_password_hash(rows[0]["hash"], request.form.get("password")):
-#            return apology("invalid username and/or password", 403)
-#
-#        # Remember which user has logged in
-#        session["user_id"] = rows[0]["player_id"]
+
 
         # Redirect user to home page
         return redirect(url_for('login'))

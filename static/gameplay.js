@@ -7,6 +7,15 @@ var card_types = {  'f':"Face up",
                     'i': "pick pile"}
 
 var timer
+var prior_state = ""
+function enable_refresh_timer(){
+    timer = setInterval(
+        function(){   
+             update_game_state()
+        },
+        200  /* 10000 ms = 10 sec */
+   );
+}
 
 $(document).ready(function(){
     update_game_state()
@@ -114,7 +123,10 @@ function update_game_state(){
 
         console.log("state", JSON.stringify(result))
         if (result.game["active-game"]){
-            render_game(result);
+            if (result.allowed_moves.allowed_action != prior_state){
+                render_game(result);
+                prior_state = result.allowed_moves.allowed_action
+            }
         } else {
             $('#game-id').text('There is NO active game');
         }
@@ -141,6 +153,7 @@ function render_game(result){
     display_game_rules(state);
     display_data_about_player(this_player);
     display_game_cards(state);
+    display_game_actions(allowed_moves, this_player_id);
 
 }
 
@@ -152,12 +165,12 @@ function display_players(players_state, this_player_id, allowed_moves){
         if (player.player_id == this_player_id) {
             this_player = player;
         }
-        display_player_cards(player, allowed_moves);
+        display_player_cards(player,this_player_id, allowed_moves);
     }
     return this_player;
 }
 
-function display_player_cards(current_player, allowed_moves) {
+function display_player_cards(current_player, this_player_id, allowed_moves) {
     game_row = $('#game-row')
 
     this_player_div = document.createElement("div")
@@ -165,46 +178,33 @@ function display_player_cards(current_player, allowed_moves) {
     this_player_div.setAttribute("id","player" + current_player.player_id.toString())
     header = document.createTextNode("Player " + current_player.player_id.toString())
     this_player_div.appendChild(header)
-    this_player_div.appendChild(lay_out_cards(current_player.face_down_cards, "d", current_player.player_id, allowed_moves))
-    this_player_div.appendChild(lay_out_cards(current_player.face_up_cards, "f", current_player.player_id, allowed_moves))
-    this_player_div.appendChild(lay_out_cards(current_player.hand_cards, "h", current_player.player_id, allowed_moves, current_player.number_in_hand))
+    this_player_div.appendChild(lay_out_cards(current_player.face_down_cards, "d", current_player.player_id,this_player_id, allowed_moves))
+    this_player_div.appendChild(lay_out_cards(current_player.face_up_cards, "f", current_player.player_id, this_player_id, allowed_moves))
+    this_player_div.appendChild(lay_out_cards(current_player.hand_cards, "h", current_player.player_id, this_player_id, allowed_moves, current_player.number_in_hand))
 
     game_row.append(this_player_div)
 
     $("select").imagepicker()
     return;
 }
-
-function lay_out_cards(cards, card_type, player_id, allowed_moves, number_in_hand = null){
+function display_game_actions(allowed_moves, player_id){
     // figure out what teh current state of the game is
     if (!(allowed_moves === undefined || allowed_moves.length == 0)){
         // this is this players cards
         // work out what the allowed move is
-        return_value = null
+
+        clearInterval(timer);
         switch(allowed_moves.allowed_action){
             case "play":{
                 // allow the user to select only the type of card(s) they can play
-                allowed_cards = allowed_moves.allowed_cards;
-                if ((allowed_cards ==  card_type) && allowed_moves.is_next_player){
-                    return_value = lay_out_cards_div(cards, card_type, player_id, number_in_hand, with_selector = true)
-                }
-                else {
-                    return_value = lay_out_cards_div(cards, card_type, player_id, number_in_hand)
-                }
+
                 if (allowed_moves.is_next_player) {add_action_button("Play")};
                 add_action_button("refresh", clear_existing = !(allowed_moves.is_next_player));
                 break;
             }
             case "swap":{
-                console.log("player_id", player_id, "allowed_moves.allowed_players", allowed_moves.allowed_players, "allowed_moves.allowed_players.includes(player_id", allowed_moves.allowed_players.includes(player_id))
                 if (allowed_moves.allowed_players.includes(player_id)){
-                    // let them pick hand and face up cards
-                    if (card_type == "h" || card_type == "f"){
-                        return_value=lay_out_cards_div(cards, card_type, player_id, number_in_hand, with_selector = true)
-                    }
-                    else {
-                        return_value=lay_out_cards_div(cards, card_type, player_id, number_in_hand)
-                    }
+
                     add_action_button("Swap");
                     add_action_button("Ready", clear_existing = false);
                     add_action_button("refresh", clear_existing = false);
@@ -212,46 +212,113 @@ function lay_out_cards(cards, card_type, player_id, allowed_moves, number_in_han
                 } else {
                     // they're not in the allowed list
 
-                    return_value = lay_out_cards_div(cards, card_type, player_id, number_in_hand)
-
                     add_action_button("refresh");
+                    enable_refresh_timer();
                     display_alert("Waiting for other users to be ready. Try refreshing.")
                 }
                 break;
             }
             case "wait":{
-                console.log("player_id", player_id, "allowed_moves.allowed_players", allowed_moves.allowed_players, "allowed_moves.allowed_players.includes(player_id", allowed_moves.allowed_players.includes(player_id))
-                return_value = lay_out_cards_div(cards, card_type, player_id, number_in_hand)
-
+               
                 add_action_button("refresh");
+                enable_refresh_timer();
                 display_alert("wait for others to play.")
-                timer = setInterval(
-                    function(){   
-                         update_game_state()
-                    },
-                    10000  /* 10000 ms = 10 sec */
-               );
                 
                 break;
             }
             case "pick":{
-                return_value = lay_out_cards_div(cards, card_type, player_id, number_in_hand)
+                
                 add_action_button("Pick up cards");
                 display_alert("You can't play - you must pick up.")
                 break;
             }
             case "lost":{
-                return_value = lay_out_cards_div(cards, card_type, player_id, number_in_hand)
+                
                 $('#ready-to-play-info').empty()
                 display_alert("you lost!")
+                break;
             }
             case "finished":{
-                return_value = lay_out_cards_div(cards, card_type, player_id, number_in_hand)
+                
                 $('#ready-to-play-info').empty()
-                display_alert("Game finished")              
+                display_alert("Game finished")         
+                break;     
             }
             default:{
                 console.log("unrecognised allowed_moves.allowed_action")
+                break;
+            }
+
+        }
+        return
+
+    }
+
+}
+function lay_out_cards(cards, card_type, card_player_id, this_player_id, allowed_moves, number_in_hand = null){
+    // figure out what teh current state of the game is
+    if (!(allowed_moves === undefined || allowed_moves.length == 0)){
+        // this is this players cards
+        // work out what the allowed move is
+        return_value = null
+        clearInterval(timer);
+        switch(allowed_moves.allowed_action){
+            case "play":{
+                // allow the user to select only the type of card(s) they can play
+                
+                allowed_cards = allowed_moves.allowed_cards;
+                if ((allowed_cards ==  card_type) && allowed_moves.is_next_player){
+                    return_value = lay_out_cards_div(cards, card_type, card_player_id, number_in_hand, with_selector = true)
+                }
+                else {
+                    return_value = lay_out_cards_div(cards, card_type, card_player_id, number_in_hand)
+                }
+
+                break;
+            }
+            case "swap":{
+               if (allowed_moves.allowed_players.includes(this_player_id) && card_player_id == this_player_id){
+                    // let them pick hand and face up cards
+                    if (card_type == "h" || card_type == "f"){
+                        return_value=lay_out_cards_div(cards, card_type, card_player_id, number_in_hand, with_selector = true)
+                    }
+                    else {
+                        return_value=lay_out_cards_div(cards, card_type, card_player_id, number_in_hand)
+                    }
+
+                } else {
+                    // they're not in the allowed list
+                    
+                    return_value = lay_out_cards_div(cards, card_type, card_player_id, number_in_hand)
+
+                }
+                break;
+            }
+            case "wait":{
+               return_value = lay_out_cards_div(cards, card_type, card_player_id, number_in_hand)
+
+                break;
+            }
+            case "pick":{
+                
+                return_value = lay_out_cards_div(cards, card_type, card_player_id, number_in_hand)
+
+                break;
+            }
+            case "lost":{
+                
+                return_value = lay_out_cards_div(cards, card_type, card_player_id, number_in_hand)
+
+                break;
+            }
+            case "finished":{
+                
+                return_value = lay_out_cards_div(cards, card_type, card_player_id, number_in_hand)
+      
+                break;     
+            }
+            default:{
+                console.error("unrecognised allowed_moves.allowed_action")
                 break;
             }
 
@@ -266,6 +333,7 @@ function lay_out_cards(cards, card_type, player_id, allowed_moves, number_in_han
     }
 
 }
+
 
 function add_action_button(button_text, clear_existing = true){
     if (clear_existing) {$('#ready-to-play-info').empty();}
