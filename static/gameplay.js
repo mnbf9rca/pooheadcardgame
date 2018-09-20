@@ -12,7 +12,7 @@ var prior_database_checksum = ""
 var prior_hash
 function enable_refresh_timer(){
     timer = setInterval(
-        function(){   
+        function(){
             check_state_change()
             //update_game_state()
         },
@@ -25,10 +25,10 @@ function check_state_change(){
     $.postJSON("/checkstate",data,function(result){
 
         //console.log("checkstate", JSON.stringify(result))
-        if ((result["current_checksum"] != prior_absolute_checksum) || 
+        if ((result["current_checksum"] != prior_absolute_checksum) ||
             (result["database_checksum"] != prior_database_checksum)){
                 console.log("checksum changed")
-                prior_absolute_checksum = result["current_checksum"] 
+                prior_absolute_checksum = result["current_checksum"]
                 prior_database_checksum = result["database_checksum"]
                 update_game_state()
         }
@@ -234,30 +234,30 @@ function display_game_actions(allowed_moves, player_id){
                 break;
             }
             case "wait":{
-               
+
                 add_action_button("refresh");
                 enable_refresh_timer();
                 display_alert("wait for others to play.")
-                
+
                 break;
             }
             case "pick":{
-                
+
                 add_action_button("Pick up cards");
                 display_alert("You can't play - you must pick up.")
                 break;
             }
             case "lost":{
-                
+
                 $('#ready-to-play-info').empty()
                 display_alert("you lost!")
                 break;
             }
             case "finished":{
-                
+
                 $('#ready-to-play-info').empty()
-                display_alert("Game finished")         
-                break;     
+                display_alert("Game finished")
+                break;
             }
             default:{
                 console.log("unrecognised allowed_moves.allowed_action")
@@ -280,7 +280,7 @@ function lay_out_cards(cards, card_type, card_player_id, this_player_id, allowed
         switch(allowed_moves.allowed_action){
             case "play":{
                 // allow the user to select only the type of card(s) they can play
-                
+
                 allowed_cards = allowed_moves.allowed_cards;
                 if ((allowed_cards ==  card_type) && allowed_moves.is_next_player){
                     return_value = lay_out_cards_div(cards, card_type, card_player_id, number_in_hand, with_selector = true)
@@ -303,7 +303,7 @@ function lay_out_cards(cards, card_type, card_player_id, this_player_id, allowed
 
                 } else {
                     // they're not in the allowed list
-                    
+
                     return_value = lay_out_cards_div(cards, card_type, card_player_id, number_in_hand)
 
                 }
@@ -315,22 +315,22 @@ function lay_out_cards(cards, card_type, card_player_id, this_player_id, allowed
                 break;
             }
             case "pick":{
-                
+
                 return_value = lay_out_cards_div(cards, card_type, card_player_id, number_in_hand)
 
                 break;
             }
             case "lost":{
-                
+
                 return_value = lay_out_cards_div(cards, card_type, card_player_id, number_in_hand)
 
                 break;
             }
             case "finished":{
-                
+
                 return_value = lay_out_cards_div(cards, card_type, card_player_id, number_in_hand)
-      
-                break;     
+
+                break;
             }
             default:{
                 console.error("unrecognised allowed_moves.allowed_action")
@@ -425,7 +425,7 @@ function lay_out_cards_div(cards, card_type, player_id, number_in_hand = false, 
     }else{
         child_div = document.createElement("div")
         child_div.className="card-group"
-        child_div.appendChild(document.createTextNode("Number of cards: " + number_in_hand.toString()))
+        if (number_in_hand) {child_div.appendChild(document.createTextNode("Number of cards: " + number_in_hand.toString()))}
         card_div.append(child_div)
     }
     return card_div;

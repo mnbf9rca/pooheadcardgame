@@ -151,7 +151,7 @@ def play_cards():
                 #     game.rotate_player()
             elif action == "pick":
                 # player has to pick up the cards
-                response = game.pick_up_cards()
+                response = game.play_pick_up()
 
             if response["action_result"]:
                 # if any of the items above report success, save state
@@ -195,7 +195,7 @@ def checkstate():
                    "database_checksum": game.get_database_checksum(db),
                    "current_checksum": game.checksum()}
     return json.dumps(has_changed)
-    
+
 
 @app.route("/getgamestate")
 @login_required
@@ -351,7 +351,7 @@ def register():
         # Query database for username
         rows = db.execute("SELECT player_id, hash FROM users WHERE username = :username",
                           username=request.form.get("username"))
-        
+
         if len(rows) != 0:
             return apology("username already taken, sorry")
 

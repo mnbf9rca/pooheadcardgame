@@ -61,7 +61,7 @@ class Game(object):
             self.pile_pick = []
             self.pile_played = []
             self.pile_deck = []
-    
+
     def get_database_checksum(self, database_connection):
         print("starting has_changed")
         config = database_connection.execute('SELECT "checksum" FROM games WHERE gameid = :game_id',
@@ -121,7 +121,7 @@ class Game(object):
     def save(self, database_connection):
         """saves the current state of the game. If this is a new game without an ID, it creates one, otherwise it updates the existing one"""
         if not self.state.game_id:
-            querystring = "INSERT INTO games (checksum, players_finished, play_on_anything_cards, play_order, less_than_card, transparent_card, burn_card, reset_card, number_of_decks, number_face_down_cards, number_hand_cards, current_turn_number, last_player, players_ready_to_start, last_player_id, gameid) VALUES (checksum:, :players_finished, :play_on_anything_cards,:play_order,:less_than_card,:transparent_card,:burn_card,:reset_card,:number_of_decks,:number_face_down_cards,:number_hand_cards,:current_turn_number,:last_player,:players_ready_to_start, NULL, :game_id)"
+            querystring = "INSERT INTO games (checksum, players_finished, play_on_anything_cards, play_order, less_than_card, transparent_card, burn_card, reset_card, number_of_decks, number_face_down_cards, number_hand_cards, current_turn_number, last_player, players_ready_to_start, last_player_id, gameid) VALUES (:checksum, :players_finished, :play_on_anything_cards,:play_order,:less_than_card,:transparent_card,:burn_card,:reset_card,:number_of_decks,:number_face_down_cards,:number_hand_cards,:current_turn_number,:last_player,:players_ready_to_start, NULL, :game_id)"
 
         else:
             querystring = "UPDATE games SET checksum = :checksum, players_finished = :players_finished, play_on_anything_cards = :play_on_anything_cards, play_order = :play_order, less_than_card = :less_than_card, transparent_card = :transparent_card, burn_card = :burn_card, reset_card = :reset_card, number_of_decks = :number_of_decks, number_face_down_cards = :number_face_down_cards ,number_hand_cards = :number_hand_cards,current_turn_number = :current_turn_number,last_player = :last_player, players_ready_to_start = :players_ready_to_start WHERE gameid = :game_id"
@@ -173,7 +173,7 @@ class Game(object):
 
         print("ended with: " + json.dumps(self.state.play_order))
 
- 
+
 
     def load(self, database_connection):
         if not self.state.game_id:
@@ -232,7 +232,7 @@ class Game(object):
         elif (not self.this_player.ID in self.state.players_finished) and ((len(self.players) - len(self.state.players_finished)) == 1):
             # you;re the last player
             response = {"allowed_action":"lost",
-                        "action-message": "You lost!"} 
+                        "action-message": "You lost!"}
         elif self.this_player.ID in self.state.players_finished:
             # this player finished, others havent
             allowed_players = (list(set(player.ID for player in self.players) - set(self.state.players_finished)))
@@ -303,7 +303,7 @@ class Game(object):
             # we're allowed to pick up cards right now
             response = self.__pick_up_cards()
         return response
-    
+
     def __pick_up_cards(self):
             # --> not relevant?? card_type, cards  = self.this_player.which_player_cards_can_player_use()
             # when we pick up cards, they always go in our hand from the played pile
@@ -375,14 +375,14 @@ class Game(object):
                             while (len(player.hand) < self.state.number_hand_cards and
                                 len(self.cards.pile_deck) > 0):
                                 player.hand.append(self.cards.pile_deck.pop())
-                        
+
                         # check if last move clears the deck
                         if self.__clears_deck(self.cards.pile_played):
                             self.cards.pile_burn.extend(self.cards.pile_played)
                             self.cards.pile_played = []
                         else:
                             self.rotate_player()
-                        
+
                         if not player.face_down:
                             # have run out of cards
                             self.state.players_finished.append(player.ID)
@@ -417,7 +417,7 @@ class Game(object):
                 all_match)
 
     def __are_all_cards_same_rank(self, cards):
-        # now check they're all the same         
+        # now check they're all the same
         last_card = None
         for card in cards:
             if last_card:
