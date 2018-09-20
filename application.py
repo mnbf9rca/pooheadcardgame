@@ -147,6 +147,9 @@ def play_cards():
                 response = game.play_move(cards, player)
                 # if response["action_result"]:
                 #     game.rotate_player()
+            elif action == "pick":
+                # player has to pick up the cards
+                response = game.pick_up_cards()
 
             if response["action_result"]:
                 # if any of the items above report success, save state
@@ -175,6 +178,10 @@ def getgamestate():
                         "state": game.state}
         # calculate the allowed moves at this stage of teh game for this player
         allowed_moves  = game.calculate_player_allowed_actions()
+        if allowed_moves["allowed_action"] == "lost":
+            #this will only just have been computed. Save.
+            game.state.players_finished.append(session["user_id"])
+            game.save(db)
         #Construct an object which represents the parts of the game that we want to expose to users
         for player in game.players:
             players_state.append( player.summarise(session["user_id"]) )

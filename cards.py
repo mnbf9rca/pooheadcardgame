@@ -4,15 +4,19 @@ class Card_Types:
     CARD_FACE_DOWN = 1
     CARD_FACE_UP = 2
     CARD_HAND = 3
+    CARD_NONE = 4
     Long_Name = {CARD_FACE_DOWN:"face down",
                  CARD_FACE_UP:"face up",
-                 CARD_HAND:"hand"}
+                 CARD_HAND:"hand",
+                 CARD_NONE:"none"}
     Short_Name= {CARD_FACE_DOWN:"d",
                  CARD_FACE_UP:"f",
-                 CARD_HAND:"h"}
+                 CARD_HAND:"h",
+                 CARD_NONE:"n"}
     Get_Code =  {"d":CARD_FACE_DOWN,
                  "f":CARD_FACE_UP,
-                 "h":CARD_HAND}
+                 "h":CARD_HAND,
+                 "n":CARD_NONE}
 
 
     def __init__(self):

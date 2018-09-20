@@ -51,7 +51,7 @@ class Player:
 
     def load_player_cards(self, database_connection, game_id, deck_type):
         print("about to load cards for player ID " + str(self.ID) + " for game " + str(game_id) + " with type " + str(deck_type) + ".")
-        cards = database_connection.execute("SELECT card_suit, card_rank FROM player_game_cards WHERE player_id = :player_id AND card_type = :card_type AND game_id = :game_id ORDER BY card_sequence ASC",
+        cards = database_connection.execute("SELECT card_suit, card_rank FROM player_game_cards WHERE player_id = :player_id AND card_type = :card_type AND game_id = :game_id ORDER BY card_rank, card_suit ASC",
                                             player_id = self.ID,
                                             card_type = deck_type,
                                             game_id = game_id)
@@ -84,3 +84,51 @@ class Player:
         self.hand = self.load_player_cards(database_connection, game_id, Card_Types.CARD_HAND)
         print("loaded hand")
         return
+
+    def add_cards_to_player_cards(self, cards_to_add, card_type):
+        if card_type == Card_Types.CARD_HAND:
+            self.hand.extend(cards_to_add)
+        elif card_type == Card_Types.CARD_FACE_DOWN:
+            self.face_down.extend(cards_to_add)
+        elif card_type == Card_Types.CARD_FACE_UP:
+            self.face_up.extend(cards_to_add)
+        else:
+            raise ValueError(f"Tried to add cards to unknown hand '{card_type}'")
+
+    def remove_cards_from_player_cards(self, cards_to_remove, card_type):
+        if card_type == Card_Types.CARD_HAND:
+            self.hand = list(set(self.hand) - set(cards_to_remove))
+        elif card_type == Card_Types.CARD_FACE_DOWN:
+            self.face_down = list(set(self.face_down) - set(cards_to_remove))
+        elif card_type == Card_Types.CARD_FACE_UP:
+            self.face_up = list(set(self.face_up) - set(cards_to_remove))
+        else:
+            raise ValueError(f"Tried to add cards to unknown hand '{card_type}'")
+    
+    def get_cards(self, card_type):
+        if card_type == Card_Types.CARD_HAND:
+            return self.hand
+        elif card_type == Card_Types.CARD_FACE_DOWN:
+            return self.face_down
+        elif card_type == Card_Types.CARD_FACE_UP:
+            return self.face_up 
+
+    def which_player_cards_can_player_use(self):
+        if self.hand:
+            # have hand cards left, so allow them to play them
+            cards_to_play = Card_Types.CARD_HAND
+            play_cards= self.hand
+        elif self.face_up:
+            # have face up cards
+            cards_to_play = Card_Types.CARD_FACE_UP
+            play_cards = self.face_up
+        elif self.face_down:
+            # none in hand or face up, must play down card
+            cards_to_play = Card_Types.CARD_FACE_DOWN
+            play_cards = self.face_down
+        else:
+            # no cards left
+            card_to_play = Card_Types.CARD_NONE
+            play_cards = []
+
+        return cards_to_play, play_cards
