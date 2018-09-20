@@ -13,6 +13,12 @@ sqlparse = "*"
 sqlalchemy = "*"
 
 [dev-packages]
+astroid = "*"
+isort = "*"
+lazy-object-proxy = "*"
+mccabe = "*"
+pylint = "*"
+wrapt = "*"
 
 [requires]
 python_version = "3.6"
