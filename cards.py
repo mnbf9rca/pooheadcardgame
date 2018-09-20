@@ -20,7 +20,6 @@ class Card_Types:
 
 
     def __init__(self):
-        Get_Code = dict((v, k) for k, v in self.Short_Name)
         return
 
 

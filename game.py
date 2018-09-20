@@ -1,6 +1,7 @@
 from cards import Card, Deck, Card_Types
 from player import Player
 import json, jsonpickle
+from zlib import crc32
 
 class Game(object):
     PILE_BURN = 1
@@ -52,8 +53,6 @@ class Game(object):
             self.pile_played_size = 0
             self.pile_deck_size = 0
 
-
-
     class Cards(object):
         """stores cards separately from state to keep secret from client"""
         def __init__(self):
@@ -62,6 +61,26 @@ class Game(object):
             self.pile_pick = []
             self.pile_played = []
             self.pile_deck = []
+    
+    def get_database_checksum(self, database_connection):
+        print("starting has_changed")
+        config = database_connection.execute('SELECT "checksum" FROM games WHERE gameid = :game_id',
+                        game_id = self.state.game_id)
+        print ("got data")
+        database_checksum = config[0]["checksum"]
+
+        print ("database_checksum", database_checksum)
+
+        return database_checksum
+
+    def checksum(self):
+        state_summary = jsonpickle.dumps({"play_order" : self.state.play_order,
+                                          "cards": self.cards,
+                                          "players_ready_to_start": self.state.players_ready_to_start,
+                                          "players_finished": self.state.players_finished,
+                                          "play_list": self.state.play_list} )
+        return str(crc32(state_summary.encode()))
+
 
     def __init__(self, this_player_id, player_IDs = []):
         self.state = self.State(player_IDs)
@@ -74,8 +93,6 @@ class Game(object):
             for ID in player_IDs:
                 player = Player(ID)
                 self.players.append(player)
-
-
 
     def deal(self):
         """creates a new deck of cards, deals to each player, then puts the remaining cards in the pick stack"""
@@ -103,14 +120,14 @@ class Game(object):
 
     def save(self, database_connection):
         """saves the current state of the game. If this is a new game without an ID, it creates one, otherwise it updates the existing one"""
-        play_order = []
         if not self.state.game_id:
-            querystring = "INSERT INTO games (players_finished, play_on_anything_cards, play_order, less_than_card, transparent_card, burn_card, reset_card, number_of_decks, number_face_down_cards, number_hand_cards, current_turn_number, last_player, players_ready_to_start, last_player_id, gameid) VALUES (:players_finished, :play_on_anything_cards,:play_order,:less_than_card,:transparent_card,:burn_card,:reset_card,:number_of_decks,:number_face_down_cards,:number_hand_cards,:current_turn_number,:last_player,:players_ready_to_start, NULL, :game_id)"
+            querystring = "INSERT INTO games (checksum, players_finished, play_on_anything_cards, play_order, less_than_card, transparent_card, burn_card, reset_card, number_of_decks, number_face_down_cards, number_hand_cards, current_turn_number, last_player, players_ready_to_start, last_player_id, gameid) VALUES (checksum:, :players_finished, :play_on_anything_cards,:play_order,:less_than_card,:transparent_card,:burn_card,:reset_card,:number_of_decks,:number_face_down_cards,:number_hand_cards,:current_turn_number,:last_player,:players_ready_to_start, NULL, :game_id)"
 
         else:
-            querystring = "UPDATE games SET players_finished = :players_finished, play_on_anything_cards = :play_on_anything_cards, play_order = :play_order, less_than_card = :less_than_card, transparent_card = :transparent_card, burn_card = :burn_card, reset_card = :reset_card, number_of_decks = :number_of_decks, number_face_down_cards = :number_face_down_cards ,number_hand_cards = :number_hand_cards,current_turn_number = :current_turn_number,last_player = :last_player, players_ready_to_start = :players_ready_to_start WHERE gameid = :game_id"
+            querystring = "UPDATE games SET checksum = :checksum, players_finished = :players_finished, play_on_anything_cards = :play_on_anything_cards, play_order = :play_order, less_than_card = :less_than_card, transparent_card = :transparent_card, burn_card = :burn_card, reset_card = :reset_card, number_of_decks = :number_of_decks, number_face_down_cards = :number_face_down_cards ,number_hand_cards = :number_hand_cards,current_turn_number = :current_turn_number,last_player = :last_player, players_ready_to_start = :players_ready_to_start WHERE gameid = :game_id"
 
         result = database_connection.execute(querystring,
+                    checksum = self.checksum(),
                     players_finished = json.dumps(self.state.players_finished),
                     play_on_anything_cards = json.dumps(self.state.play_on_anything_cards),
                     play_order = json.dumps(self.state.play_order),
@@ -156,6 +173,7 @@ class Game(object):
 
         print("ended with: " + json.dumps(self.state.play_order))
 
+ 
 
     def load(self, database_connection):
         if not self.state.game_id:
@@ -265,18 +283,15 @@ class Game(object):
 
         if deck_type == Game.PILE_BURN:
             self.cards.pile_burn = cards_to_add
-            self.state.pile_burn_size = len(self.cards.pile_burn)
         elif deck_type == Game.PILE_PICK:
             self.cards.pile_pick = cards_to_add
-            self.state.pile_pick_size = len(self.cards.pile_pick)
         elif deck_type == Game.PILE_PLAYED:
             self.cards.pile_played = cards_to_add
-            self.state.pile_played_size = len(self.cards.pile_played)
         elif deck_type == Game.PILE_DECK:
             self.cards.pile_deck = cards_to_add
-            self.state.pile_deck_size = len(self.cards.pile_deck)
         else:
             raise ValueError(f'cant find pile for {deck_type}.')
+        self.__update_pile_sizes()
         return
 
     def play_pick_up(self):
@@ -290,8 +305,8 @@ class Game(object):
         return response
     
     def __pick_up_cards(self):
-            card_type, cards  = self.this_player.which_player_cards_can_player_use()
-            # when we pick up cards, they always go in our hand
+            # --> not relevant?? card_type, cards  = self.this_player.which_player_cards_can_player_use()
+            # when we pick up cards, they always go in our hand from the played pile
             self.this_player.add_cards_to_player_cards(self.cards.pile_played, Card_Types.CARD_HAND)
             self.cards.pile_played = []
             self.__update_pile_sizes()
@@ -362,14 +377,12 @@ class Game(object):
                                 player.hand.append(self.cards.pile_deck.pop())
                         
                         # check if last move clears the deck
-                        clears_deck =  self.__clears_deck(self.cards.pile_played)
-                        print("clears_deck", clears_deck)
-                        if clears_deck:
+                        if self.__clears_deck(self.cards.pile_played):
                             self.cards.pile_burn.extend(self.cards.pile_played)
                             self.cards.pile_played = []
                         else:
                             self.rotate_player()
-                        self.__update_pile_sizes()
+                        
                         if not player.face_down:
                             # have run out of cards
                             self.state.players_finished.append(player.ID)
@@ -380,17 +393,16 @@ class Game(object):
                         if card_type == Card_Types.CARD_FACE_DOWN:
                             # tried to play a face down card but lost
                             # move this card to the player's hand
+                            player.add_cards_to_player_cards(validated_cards, Card_Types.CARD_HAND)
+                            # pick up the rest of the played cards
                             self.__pick_up_cards()
                             self.this_player.remove_cards_from_player_cards(validated_cards, card_type)
                             response = {'action':'play', 'action_result':True, 'action_message': 'playing down cards not yet implemented'}
                         else:
                             response = {'action':'play', 'action_result':False, 'action_message':f'Cannot play that move on the current stack'}
                         self.__update_pile_sizes()
-                        return response
-
-                    # now check they're all the same
-
-                    response = {'action':'play', 'action_result':True}
+                        # return response
+                    # response = {'action':'play', 'action_result':True}
                 else:
                     response = {'action':'play', 'action_result':False, 'action_message':"Select one or more cards to play"}
         return response

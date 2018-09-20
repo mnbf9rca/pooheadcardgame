@@ -96,19 +96,21 @@ def play_cards():
 
         print("game loaded")
         if not request.is_json:
-            response = {'action':'unknown', 'action_result':False}
+            response = {'action':'unknown', 'action_result':False, 'action_message': "submit your request via POST using JSON"}
         else:
             request_json = request.get_json(cache=False)
 
             # first, let's get the action and respond with a failure if we can't.
             try:
                 action = request_json["action"]
-            except KeyError as e:
+            except KeyError:
                 response = {'action':'unknown', 'action_result':False, 'action_message':"no action specified"}
                 return json.dumps(response)
-            except IndexError as e:
+            except IndexError:
                 response = {'action':'unknown', 'action_result':False, 'action_message':"no action specified"}
                 return json.dumps(response)
+            except:
+                raise
             # now set this as default action in case it fails to match any action below
             response = {'action':action, 'action_result':False, 'action_message':"unknown action " + action}
 
@@ -122,7 +124,7 @@ def play_cards():
                 # check if we've been given any action cards
                 try:
                     cards = request_json["action_cards"]
-                except KeyError as e:
+                except KeyError:
                     response = {'action':action, 'action_result':False, 'action_message':"no cards specified"}
                     return json.dumps(response)
 
@@ -140,7 +142,7 @@ def play_cards():
                 print("starting play")
                 try:
                     cards = request_json["action_cards"]
-                except KeyError as e:
+                except KeyError:
                     response = {'action':action, 'action_result':False, 'action_message':"no cards specified"}
                     return json.dumps(response)
                 # find out which cards were selected
@@ -160,6 +162,40 @@ def play_cards():
     else:
         return redirect("/")
 
+@app.route("/checkstate", methods=["GET", "POST"])
+@login_required
+def checkstate():
+    """ returns true or false if the latest checksum recorded for this game matches the one submitted by the client """
+    response = {'action':'checkstate', 'action_result':False, 'action_message':"no checksum specified - use JSON POST or /checkstate?checksum="}
+    if request.method == "POST":
+        if request.is_json:
+            request_json = request.get_json(cache=False)
+            try:
+                previous_checksum = request_json["checksum"]
+            except KeyError:
+                return json.dumps(response)
+            except IndexError:
+                return json.dumps(response)
+            except:
+                raise
+        else:
+            return json.dumps(response)
+    else:
+        try:
+            previous_checksum = request.args.get("checksum")
+        except KeyError:
+            return json.dumps(response)
+        except IndexError:
+            return json.dumps(response)
+        except:
+            raise
+    game = session["game"]
+    has_changed = {"action":"haschanged",
+                   "your_previous_checksum" : previous_checksum,
+                   "database_checksum": game.get_database_checksum(db),
+                   "current_checksum": game.checksum()}
+    return json.dumps(has_changed)
+    
 
 @app.route("/getgamestate")
 @login_required
@@ -175,7 +211,8 @@ def getgamestate():
         #always reload in case other users have caused a state change
         game.load(db)
         game_state = {'active-game':True,
-                        "state": game.state}
+                        "state": game.state,
+                        "checksum":game.checksum()}
         # calculate the allowed moves at this stage of teh game for this player
         allowed_moves  = game.calculate_player_allowed_actions()
         if allowed_moves["allowed_action"] == "lost":
@@ -189,7 +226,8 @@ def getgamestate():
     # construct response
     total_state = { 'game': game_state,
                     'allowed_moves' : allowed_moves,
-                    'players_state': players_state}
+                    'players_state': players_state,
+                    "checksum":game.checksum()}
     print("total_state_", total_state)
 
     resp = make_response(jsonpickle.encode(total_state, unpicklable=False), 200)

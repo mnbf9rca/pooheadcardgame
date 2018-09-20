@@ -7,14 +7,32 @@ var card_types = {  'f':"Face up",
                     'i': "pick pile"}
 
 var timer
-var prior_state = ""
+var prior_absolute_checksum = ""
+var prior_database_checksum = ""
+var prior_hash
 function enable_refresh_timer(){
     timer = setInterval(
         function(){   
-             update_game_state()
+            check_state_change()
+            //update_game_state()
         },
         200  /* 10000 ms = 10 sec */
    );
+}
+
+function check_state_change(){
+    data = {"checksum": prior_absolute_checksum}
+    $.postJSON("/checkstate",data,function(result){
+
+        //console.log("checkstate", JSON.stringify(result))
+        if ((result["current_checksum"] != prior_absolute_checksum) || 
+            (result["database_checksum"] != prior_database_checksum)){
+                console.log("checksum changed")
+                prior_absolute_checksum = result["current_checksum"] 
+                prior_database_checksum = result["database_checksum"]
+                update_game_state()
+        }
+    });
 }
 
 $(document).ready(function(){
@@ -123,10 +141,7 @@ function update_game_state(){
 
         console.log("state", JSON.stringify(result))
         if (result.game["active-game"]){
-            if (result.allowed_moves.allowed_action != prior_state){
                 render_game(result);
-                prior_state = result.allowed_moves.allowed_action
-            }
         } else {
             $('#game-id').text('There is NO active game');
         }
