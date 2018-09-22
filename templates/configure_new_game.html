@@ -1,0 +1,115 @@
+{% extends "layout.html" %}
+{% block head %}
+
+
+<script src='/static/newgame.js'></script>
+
+{% endblock %}
+
+{% block title %}
+    Start a new game
+{% endblock %}
+
+{% block main %}
+
+
+<form  id='form'>
+    <h2>Create a new game</h2>
+    <div>Please choose how to configure the game</div>
+
+{% for card_type in game_options.special_cards %}
+
+        <div id='{{card_type.code}}-card-div' class='form-row justify-content-start'>
+            <div class='col-4' style='text-align: right'>
+                <label for='{{card_type.code}}-label"'>{{card_type.display}}</label>
+            </div>
+            <div class='col-1'>
+            <select class="form-control" id="{{card_type.code}}-value" name="{{card_type.code}}-value">
+            {% for card in game_options.all_cards %}
+                {% if card == card_type.value %}
+                    <option selected='selected'>{{card}}</option>
+                {% else %}
+                    <option>{{card}}</option>
+                {% endif %}
+            {% endfor %}
+            </select>
+            </div>
+            <div class='col-3'>
+            <div class="form-check">
+                {% if card_type.play_on_anything == True %}
+                <input type="checkbox" class="form-check-input" name="{{card_type.code}}-on-anything" id="{{card_type.code}}-on-anything" checked>
+                {% else %}
+                <input type="checkbox" class="form-check-input" id="{{card_type.code}}-on-anything" name="{{card_type.code}}-on-anything">
+                {% endif %}
+                <label class="custom-control-label" for="{{card_type.code}}-on-anything">Can play on anything</label>
+            </div>
+            </div>
+        
+        </div>
+
+{% endfor %}
+<div id='number-cards-div' class='form-row justify-content-start'>
+
+    <div class='col-3' style='text-align: right'>
+        <label for='number-face-down'>Face down cards</label>
+    </div>
+    <div class='col-1'>
+        <select class="form-control" id="number-face-down" name="number-face-down">
+            <option>2</option>
+            <option selected="selected">3</option>
+            <option>4</option>
+            <option>5</option>
+            <option>6</option>
+            <option>7</option>
+        </select>
+    </div>
+
+    <div class='col-3' style='text-align: right'>
+        <label for='number-hand'>Hand cards</label>
+    </div>
+    <div class='col-1'>
+        <select class="form-control" id="number-hand" name="number-hand">
+            <option>2</option>
+            <option selected="selected">3</option>
+            <option>4</option>
+            <option>5</option>
+            <option>6</option>
+            <option>7</option>
+        </select>
+    </div>
+</div>
+<div id='number-players-div' class='form-row justify-content-start'>
+    <div class='col-3' style='text-align: right'>
+        <label for='numberOfPlayers'>Number of players</label>
+    </div>
+    <div class='col-1'>
+        <select class="form-control" id="number-of-players" name="number-of-players">
+            <option selected="selected">2</option>
+            <option>3</option>
+            <option>4</option>
+        </select>
+    </div>
+    <div class='col-3' style='text-align: right'>
+        <label for='number-of-decks'>Number of decks</label>
+    </div>
+    <div class='col-1'>
+        <select class="form-control" id="number-of-decks" name="number-of-decks">
+            <option selected="selected">1</option>
+            <option>2</option>
+            <option>3</option>
+        </select>
+    </div>
+</div>
+<div id='number-players-div' class='form-row justify-content-start'>
+    <div class='col-4' style='text-align: right'>
+        <br/>
+    </div>
+    <input type="hidden" value="1" name="new" />
+    <div class='col-1'>
+        <input type='button' value='Create game and wait for other players' id='action_button'/>
+    </div>
+</div>
+</form>
+
+
+{% endblock %}

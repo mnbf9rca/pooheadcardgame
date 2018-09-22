@@ -23,13 +23,150 @@ class Game(object):
         PILE_BURN : "self.cards.pile_burn_size"
     }
 
+    game_properties = {
+                        "special_cards": [
+                            {
+                                "code": "less",
+                                "display": "Less than card",
+                                "value": '7',
+                                "play_on_anything": False
+                            },
+                            {
+                                "code": "transparent",
+                                "display": "Transparent card",
+                                "value": 'None',
+                                "play_on_anything":True
+                            },
+                            {
+                                "code": "burn",
+                                "display": "Burn card",
+                                "value": '10',
+                                "play_on_anything":True
+                            },
+                            {
+                                "code": "reset",
+                                "display": "'Can play on anything' card",
+                                "value": '2',
+                                "play_on_anything":True
+                            }
+                        ],
+                        "all_cards":['None', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A' ],
+                        "number_of_decks": 1,
+                        "number_face_down_cards": 3,
+                        "number_hand_cards": 7,
+                        "number_of_players": 2
+                    }
+
     this_player = None
 
+    def __init__(self, this_player_id, number_of_players = 0):
+        self.state = self.State(number_of_players)
+        self.cards = self.Cards()
+        self.state.this_player_id = this_player_id
+        #players - we only know of 1
+
+        self.players = []
+        self.players.append(Player(this_player_id))
+
+    
+    
+    def are_there_enough_players(self):
+        return self.state.number_of_players == len(self.players)
+
+    def add_players_to_game(self, player_id):
+        if self.state.number_of_players < len(self.players):
+            self.players.append(Player(player_id))
+            return True
+        else:
+            return False
+            
+    def __parse_int_from_json(self, value_to_clean, min = 0, max = 13):
+        if value_to_clean.lower() == "none":
+            val = 0
+        else:
+            try:
+                val = int(value_to_clean)
+            except ValueError:
+                raise
+        if (val > max) or (val < min):
+            raise ValueError(f"Invalid value provided in requested configuration JSON: {min} < {val} < {max}")
+        return val
+
+    def parse_requested_config(self, requested_config):
+        print("parsing config")
+        print("requested_config", jsonpickle.dumps(requested_config))
+
+        less_on_anything, transparent_on_anything, burn_on_anything, reset_on_anything = False, False, False, False
+        list_of_special_cards = []
+
+        for config_item in requested_config:
+            name = config_item["name"]
+            print("name", name)
+            if name == "less-value":
+                self.state.less_than_card = self.__parse_int_from_json(config_item["value"])
+            if name == "less-on-anything":
+                less_on_anything = True
+            if name == "transparent-value":
+                self.state.transparent_card = self.__parse_int_from_json(config_item["value"])
+            if name == "transparent-on-anything":
+                transparent_on_anything = True
+            if name == "burn-value":
+                self.state.burn_card = self.__parse_int_from_json(config_item["value"])
+            if name == "burn-on-anything":
+                burn_on_anything = True
+            if name == "reset-value":
+                self.state.reset_card = self.__parse_int_from_json(config_item["value"])
+            if name == "reset-on-anything":
+                reset_on_anything = True
+            if name == "number-face-down":
+                self.number_face_down_cards = self.__parse_int_from_json(config_item["value"], 3, 9)
+            if name == "number-hand":
+                self.state.number_hand_cards = self.__parse_int_from_json(config_item["value"], 3, 9)
+            if name == "number-of-decks":
+                self.state.number_of_decks = self.__parse_int_from_json(config_item["value"], 1, 2)
+            if name == "number-of-players":
+                self.number_of_players = self.__parse_int_from_json(config_item["value"], 2, 6)
+        
+        if self.state.less_than_card > 0:
+            list_of_special_cards.append(self.state.less_than_card)
+        if self.state.transparent_card > 0:
+            list_of_special_cards.append(self.state.transparent_card)
+        if self.state.burn_card > 0:
+            list_of_special_cards.append(self.state.burn_card)
+        if self.state.reset_card > 0:
+            list_of_special_cards.append(self.state.reset_card)
+
+        # now parse the "play on anything" cards
+        self.state.play_on_anything_cards = []
+        if less_on_anything and self.state.less_than_card > 0:
+            self.state.play_on_anything_cards.append(self.state.less_than_card)
+        if transparent_on_anything and self.state.transparent_card > 0:
+            self.state.play_on_anything_cards.append(self.state.transparent_card)
+        if burn_on_anything and self.state.burn_card > 0:
+            self.state.play_on_anything_cards.append(self.state.burn_card)
+        if reset_on_anything and self.state.reset_card > 0:
+            self.state.play_on_anything_cards.append(self.state.reset_card)
+
+        return len(list_of_special_cards) == len(set(list_of_special_cards))
+        
+        print("done parsing config")
+        return
+        
+        """if requested_config["less-value"]:
+            self.less_than_card = int(requested_config["less-value"])
+        less_than_card = 7,
+                        transparent_card = 0,
+                        burn_card = 10,
+                        reset_card = 2,
+                        number_face_down_cards = 3,
+                        number_hand_cards = 7,
+                        number_of_decks = 1,
+                        play_on_anything_cards = [2,10]"""
     class State(object):
         """holds the current state of this game, excluding player hands and config"""
-        def __init__(self, player_IDs):
-            self.number_of_players = len(player_IDs)
-            self.play_order = player_IDs
+        def __init__(self, number_of_players):
+            self.number_of_players = number_of_players
+            self.play_order = None
             self.this_player_id = None
             #game config
             self.game_id = None
@@ -39,10 +176,10 @@ class Game(object):
             self.reset_card = 2
             self.number_of_decks = 1
             self.number_face_down_cards = 3
-            self.number_hand_cards = 7
+            self.number_hand_cards = 3
             self.players_ready_to_start = []
             self.players_finished = []
-            self.play_on_anything_cards = [2, 10]
+            self.play_on_anything_cards = [2,10]
 
             # game state
             self.current_turn_number = 0
@@ -52,6 +189,7 @@ class Game(object):
             self.pile_pick_size = 0
             self.pile_played_size = 0
             self.pile_deck_size = 0
+
 
     class Cards(object):
         """stores cards separately from state to keep secret from client"""
@@ -63,17 +201,14 @@ class Game(object):
             self.pile_deck = []
 
     def get_database_checksum(self, database_connection):
-        print("starting has_changed")
+        """loads the 'checksum' field from teh database for the current game and returns it"""
         config = database_connection.execute('SELECT "checksum" FROM games WHERE gameid = :game_id',
                         game_id = self.state.game_id)
-        print ("got data")
         database_checksum = config[0]["checksum"]
-
-        print ("database_checksum", database_checksum)
-
         return database_checksum
 
     def checksum(self):
+        """calculates a CRC32 checksum for the current state based on an arbitrary but static representative set of game objects"""
         state_summary = jsonpickle.dumps({"play_order" : self.state.play_order,
                                           "cards": self.cards,
                                           "players_ready_to_start": self.state.players_ready_to_start,
@@ -82,17 +217,7 @@ class Game(object):
         return str(crc32(state_summary.encode()))
 
 
-    def __init__(self, this_player_id, player_IDs = []):
-        self.state = self.State(player_IDs)
-        self.cards = self.Cards()
-        self.state.this_player_id = this_player_id
-        #players
 
-        self.players = []
-        if player_IDs:
-            for ID in player_IDs:
-                player = Player(ID)
-                self.players.append(player)
 
     def deal(self):
         """creates a new deck of cards, deals to each player, then puts the remaining cards in the pick stack"""
@@ -164,18 +289,15 @@ class Game(object):
         return self.state.game_id
 
     def rotate_player(self):
-        print("started with: " + json.dumps(self.state.play_order))
+        """rotates the play list once a player has played"""
         last_player = self.state.play_order.pop(0)
-        print("last player: " + json.dumps(last_player))
         self.state.last_player = last_player
-
         self.state.play_order.append(last_player)
-
-        print("ended with: " + json.dumps(self.state.play_order))
 
 
 
     def load(self, database_connection):
+        """loads the configuration of the game defined by state.game_id"""
         if not self.state.game_id:
             raise ValueError('tried to load game without setting game_id.')
         if not len(self.players) > 0:
@@ -199,7 +321,6 @@ class Game(object):
         self.state.current_turn_number = config["current_turn_number"]
         self.state.last_player = config["last_player"]
         self.state.players_ready_to_start = json.loads(config["players_ready_to_start"])
-        print("ready to start: " + str(self.state.players_ready_to_start))
 
         # load decks
         self.cards.pile_deck = self.__load_cards_from_database(Game.PILE_DECK, self.state.game_id, database_connection)
@@ -208,13 +329,13 @@ class Game(object):
         self.cards.pile_pick = self.__load_cards_from_database(Game.PILE_PICK, self.state.game_id, database_connection)
         self.__update_pile_sizes()
 
-        print("loaded config and card stacks for game ID :" + str(self.state.game_id))
         for player in self.players:
             player.load(database_connection, self.state.game_id)
             # store a reference to this player's object on the game itself
             if player.ID == self.state.this_player_id: self.this_player = player
 
     def __update_pile_sizes(self):
+        """updates the summary count of each pile size, and copies the played pile to the active state"""
         self.state.pile_pick_size = len(self.cards.pile_pick)
         self.state.pile_played_size = len(self.cards.pile_played)
         self.state.pile_burn_size = len(self.cards.pile_burn)
@@ -222,8 +343,8 @@ class Game(object):
         self.state.play_list = self.cards.pile_played
 
     def calculate_player_allowed_actions(self):
+        """calculates what action, if any, the current player is allowed to perform"""
         response = {"allowed_action":"unknown", "allowed_players":"unknown"}
-        print("self.this_player", jsonpickle.dumps(self.this_player))
 
         if len(self.state.players_finished) == len(self.players):
             # all done
@@ -294,14 +415,21 @@ class Game(object):
         self.__update_pile_sizes()
         return
 
+    def play_no_swap(self):
+        """plays the move 'dont swap, ready to start' at the beginning of the game"""
+        self.state.players_ready_to_start.append(self.state.this_player_id)
+        return {'action':'no_swap', 'action_result':True}
+
     def play_pick_up(self):
-        """picks up the cards from the stack and puts them in the player's hand"""
+        """picks up the cards from the played stack and puts them in the player's hand"""
         response = {'action':'pick', 'action_result':False, 'action_message':"You are not allowed to pick up cards right now"}
         allowed_actions = self.calculate_player_allowed_actions()
         if (allowed_actions["allowed_action"] == "pick" and
             allowed_actions["is_next_player"]):
             # we're allowed to pick up cards right now
             response = self.__pick_up_cards()
+        else:
+            response = {'action':'pick', 'action_result':False, 'action_message': "Could not pick up - either not an allowed move, or it's not your turn"}
         return response
 
     def __pick_up_cards(self):
@@ -324,7 +452,7 @@ class Game(object):
         # play
         allowed_actions = self.calculate_player_allowed_actions()
         if (allowed_actions["allowed_action"] == "play" and
-            allowed_actions["is_next_player"]):
+            allowed_actions["is_next_player"] == self.state.this_player_id):
                 if cards_to_play:
                     # validate that these cards are in this user's hand
                     validated_card_indexes = []
@@ -335,7 +463,7 @@ class Game(object):
                         allowed_cards = Card_Types.Get_Code[allowed_actions["allowed_cards"]]
                         try:
                             card_type = Card_Types.Get_Code[card_description[0]]
-                        except KeyError:
+                        except (KeyError, IndexError):
                             result = {'action':'play', 'action_result':False, 'action_message':f'Unknown card type {card_description[0]}'}
                             return result
                         except:
@@ -417,6 +545,7 @@ class Game(object):
                 all_match)
 
     def __are_all_cards_same_rank(self, cards):
+        """checks whether all the cards in a given set are al of the same value"""
         # now check they're all the same
         last_card = None
         for card in cards:
@@ -427,6 +556,10 @@ class Game(object):
         return True
 
     def __can_play_cards(self, cards_to_check):
+        """checks whether the card/cards can be played e.g. does 
+           the user have ANY cards in their hand which can be played 
+           on the current played stack, or can the cards in the user's play
+           list be played on teh current played stack"""
         print("cards", jsonpickle.dumps(cards_to_check))
 
         if not self.cards.pile_played:
@@ -447,6 +580,7 @@ class Game(object):
             return False
 
     def __check_card_index_not_over_deck_length(self, card_index, card_type, player):
+        """checks that the card at a given index actually exists in the given hand"""
         if card_type == Card_Types.CARD_FACE_UP:
             deck = player.face_up
         elif card_type == Card_Types.CARD_FACE_DOWN:
@@ -464,7 +598,7 @@ class Game(object):
             return None
 
     def swap_cards(self, cards_to_swap, player):
-        """swaps cards in hand with face up"""
+        """swaps cards in hand with cards in face up"""
         # check game state - has this user already committed cards?
         # if not, then just swap the cards
         response = None
@@ -481,9 +615,8 @@ class Game(object):
                     index = int(card[2:])
                     print("index", index)
                     try:
-                        print("Card_Types.Get_Code", jsonpickle.dumps(Card_Types.Get_Code))
                         card_type = Card_Types.Get_Code[card[0]]
-                    except KeyError:
+                    except (KeyError, IndexError):
                         response = {'action':'swap', 'action_result':False, 'action_message':f"Unrecognised card type '{card[0]}'"}
                         return response
                     except:
@@ -513,7 +646,6 @@ class Game(object):
                 elif len(hand_cards) <= 0:
                     response = {'action':'swap', 'action_result':False, 'action_message':'Select the face up and hand cards you want to swap.'}
                 else:
-                    print("len hand", len(hand_cards), "len face", len(face_cards))
                     for i in range(len(hand_cards)):
                          player.hand[hand_cards[i]], player.face_up[face_cards[i]] = player.face_up[face_cards[i]], player.hand[hand_cards[i]]
 
@@ -544,7 +676,6 @@ class Game(object):
 
             i = 0
             for card in deck:
-                    print(str(card) + " at position " + str(i))
                     result = database_connection.execute("INSERT INTO game_cards (game_id, card_location, card_suit, card_rank, card_sequence) VALUES (:game_id, :deck_type, :card_suit, :card_rank, :i)",
                                                             game_id = game_id,
                                                             deck_type = deck_type,
@@ -564,3 +695,4 @@ def get_users_for_game(game_id, database_connection):
     if len(players) > 0:
         list_of_players.extend([player["player_id"] for player in players])
     return list_of_players
+
