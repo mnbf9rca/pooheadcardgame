@@ -1,4 +1,4 @@
-var card_types = {  'f':"Face up",
+const card_types = {  'f':"Face up",
                     'h':"in hand",
                     'd':"face down",
                     'p': "played cards",
@@ -6,9 +6,9 @@ var card_types = {  'f':"Face up",
                     'b': "burn pile",
                     'i': "pick pile"}
 
-var timer
+let timer
 
-var prior_database_checksum = ""
+let prior_database_checksum = ""
 
 function enable_refresh_timer(){
     timer = setInterval(
