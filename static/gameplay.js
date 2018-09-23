@@ -1,4 +1,4 @@
-const card_types = {  'f':"Face up",
+const card_types = {'f':"face up",
                     'h':"in hand",
                     'd':"face down",
                     'p': "played cards",
