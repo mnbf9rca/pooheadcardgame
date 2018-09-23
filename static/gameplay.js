@@ -7,6 +7,7 @@ const card_types = {'f':"face up",
                     'i': "pick pile"}
 
 let timer
+let this_player_id
 
 let prior_database_checksum = ""
 
@@ -125,10 +126,10 @@ function identify_selected_cards(){
 
 function display_alert(alert_message, alert_class = "alert-primary"){
     $("#alert-pane").remove()
-    var div = document.createElement("div")
+    let div = document.createElement("div");
     div.setAttribute("id","alert-pane")
     div.className = "alert " + alert_class
-    var newContent = document.createTextNode(alert_message)
+    let newContent = document.createTextNode(alert_message);
     div.appendChild(newContent)
     $('#ready-to-play-info').append(div)
 }
@@ -148,13 +149,13 @@ function update_game_state(){
 }
 
 function render_game(result){
-    var state = result.game.state;
-    var players_state = result.players_state;
-    var allowed_moves = result.allowed_moves;
+    let state = result.game.state;
+    let players_state = result.players_state;
+    let allowed_moves = result.allowed_moves;
 
     $('#game-id').text('There is an active game with ID ' + state.game_id + '.');
     // find our player ID
-    var this_player_id = state.this_player_id;
+    this_player_id = state.this_player_id;
 
     $('#player-id').html('Your player ID is ' + this_player_id + '. There are ' + state["number_of_players_joined"] +  ' players in this game. The next player is player with ID ' + state["play_order"][0]);
 
@@ -356,12 +357,12 @@ function add_action_button(button_text, clear_existing = true){
 
 
 function lay_out_cards_div(cards, card_type, player_id, number_in_hand = false, with_selector = false){
-    var card_div = document.createElement("div")
+    let card_div = document.createElement("div")
     card_div.className = "card"
     card_div.setAttribute("id", card_type.toString() + "p" + player_id.toString())
     card_div.className="card"
 
-    var child_div = document.createElement("div")
+    let child_div = document.createElement("div")
     child_div.className="card-header"
     child_div.appendChild(document.createTextNode(card_types[card_type]))
     card_div.append(child_div)
@@ -400,14 +401,14 @@ function lay_out_cards_div(cards, card_type, player_id, number_in_hand = false, 
                 rank = card.rank;
 
 
-                var img = document.createElement("img")
+                let img = document.createElement("img")
                 img.setAttribute("alt", describe_card(suit, rank))
                 img.setAttribute("src", "/static/cards/" + get_card_key(suit, rank) +".svg")
 
-                var card_img=document.createElement("div")
+                let card_img=document.createElement("div")
                 card_img.className="card-img-top"
                 card_img.appendChild(img)
-                var this_card_div=document.createElement("div")
+                let this_card_div=document.createElement("div")
                 this_card_div.className="flex-card"
                 this_card_div.appendChild(card_img)
 
@@ -462,11 +463,11 @@ function display_game_cards(game_state) {
 }
 
 function lay_out_game_cards(number_of_cards, card_type, card_list = null){
-    var card_div = document.createElement("div")
+    let card_div = document.createElement("div")
     card_div.setAttribute("id", "deck-" + card_type.toString())
     card_div.className="card"
 
-    var child_div = document.createElement("div")
+    let child_div = document.createElement("div")
     child_div.className="card-header"
     child_div.appendChild(document.createTextNode(card_types[card_type]))
     child_div.appendChild(document.createElement("br"));
@@ -480,21 +481,21 @@ function lay_out_game_cards(number_of_cards, card_type, card_list = null){
             child_div.className="flex-div"
             max_cards = Math.max(number_of_cards - 4, 0)
             for (i = number_of_cards-1, j=0; i >= max_cards; i--){
-                var card_header = document.createElement("div")
+                let card_header = document.createElement("div")
                 // card_header.className="card-header"
                 //card_header.className="flex-card-20"
                 card_header.appendChild(document.createTextNode((j--).toString()))
                 card = card_list[i]
                 suit = card.suit;
                 rank = card.rank;
-                var img = document.createElement("img")
+                let img = document.createElement("img")
                 img.setAttribute("alt", describe_card(suit, rank))
                 img.setAttribute("src", "/static/cards/" + get_card_key(suit, rank) +".svg")
 
-                var card_img=document.createElement("div")
+                let card_img=document.createElement("div")
                 card_img.className="card-img-top"
                 card_img.appendChild(img)
-                var this_card_div=document.createElement("div")
+                let this_card_div=document.createElement("div")
                 this_card_div.className="flex-card"
                 this_card_div.append(card_header)
                 this_card_div.appendChild(card_img)
@@ -531,8 +532,8 @@ function check_card(card_to_check){
 
 
 function describe_card(suit, rank){
-    var suits = {0: "a card", 1: "hearts", 2: "diamonds", 3: "clubs", 4: "spades" }
-    var ranks = {1: "back", 2: "two", 3: "three", 4: "four", 5: "five",
+    let suits = {0: "a card", 1: "hearts", 2: "diamonds", 3: "clubs", 4: "spades" }
+    let ranks = {1: "back", 2: "two", 3: "three", 4: "four", 5: "five",
             6: "six", 7: "seven", 8: "eight", 9: "nine",
             10: "ten", 11: "jack", 12: "queen", 13: "king", 14: "ace"}
     return(ranks[rank] + " of " + suits[suit])
@@ -540,8 +541,8 @@ function describe_card(suit, rank){
 
 
 function get_card_key(suit, rank){
-    var suits_short = {0:"B", 1:"H", 2: "D", 3: "C", 4: "S"}
-    var rank_short = {10:"T", 11:"J", 12:"Q", 13:"K", 14:"A"}
+    let suits_short = {0:"B", 1:"H", 2: "D", 3: "C", 4: "S"}
+    let rank_short = {10:"T", 11:"J", 12:"Q", 13:"K", 14:"A"}
     if (rank in rank_short){
         rank = rank_short[rank]
     }
