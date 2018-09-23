@@ -8,12 +8,13 @@ from flask_session import Session
 from werkzeug.exceptions import default_exceptions
 from werkzeug.security import check_password_hash, generate_password_hash
 from cards import Card, Deck
-from game import Game, get_users_for_game
+from game import Game, get_users_for_game, get_list_of_games_for_this_user, get_list_of_games_looking_for_players
 # from https://github.com/cs50/python-cs50
-from helpers import apology, login_required, lookup, usd
+from helpers import apology, login_required, lookup
 from player import Player
 # from https://github.com/cs50/python-cs50
 from sql import SQL
+from urllib.parse import quote_plus
 
 # from game_helpers import get_users_for_game
 
@@ -24,12 +25,15 @@ app = Flask(__name__)
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 
 # Ensure responses aren't cached
+
+
 @app.after_request
 def after_request(response):
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Expires"] = 0
     response.headers["Pragma"] = "no-cache"
     return response
+
 
 # Configure session to use filesystem (instead of signed cookies)
 app.config["SESSION_FILE_DIR"] = mkdtemp()
@@ -48,40 +52,77 @@ def index():
     else:
         return render_template("index.html")
 
+
 @app.route("/logged_in")
 @login_required
 def logged_in():
-     # user is logged in, check for an active game
-    games = db.execute("SELECT game_id FROM player_game WHERE player_id = :player_id",
-                        player_id=session["user_id"])
-
-
-    return render_template("logged_in.html", games=games)
+    # user is logged in, check for an active game
+    message = ""
+    try:
+         message = request.args["msg"]
+    except (KeyError, IndexError):
+        pass
+    except:
+        raise
+    
+    games = get_list_of_games_for_this_user(session["user_id"], db)
+    new_games = get_list_of_games_looking_for_players(session["user_id"], db)
+    return render_template("logged_in.html", games=games, new_games=new_games, message = message)
 
 @app.route("/load_game")
 @login_required
 def load_game():
     if not request.args["game_id"]:
         return apology("must provide game id", 500)
+
     game_id = int(request.args["game_id"])
 
     # check the users playing this game
 
-    players = get_users_for_game(game_id, db)
-    print("players loaded: " + str(players))
-    g = Game(session["user_id"], players)
+    g = Game(session["user_id"])
     session["game"] = g
 
     g.state.game_id = game_id
     session["game_id"] = g.state.game_id
-    g.load(db)
+ 
 
-    return redirect("/play")
+    message = "Loaded the game, but it's not ready to start yet. Wait for other players."
+    players = get_users_for_game(game_id, db)
+    print("players loaded: " + str(players))
+    g.players = []
+    for player in players:
+        g.players.append(Player(player)) 
+    g.load(db)
+    add = None
+    try:
+        add = request.args["add"]
+    except (KeyError, IndexError):
+        pass
+    except:
+        raise
+
+    if add:
+        # looking to add themselves to this game
+        # check whether this is allowed.
+        if not g.add_players_to_game(session["user_id"], db):
+            message = quote_plus("could not add you to the game")
+            return redirect(url_for("logged_in") + f"?msg={message}")
+        else:
+            message = "Added you to the game. Now sit tight and wait for enough other players to join."
+    
+    if g.ready_to_start:
+        if not g.state.deal_done:
+            g.deal()
+            g.save(db)
+        return redirect("/play")
+    else:
+        msg = quote_plus(message)
+        return redirect(url_for("logged_in") + f"?msg={msg}")
 
 @app.route("/playcards", methods=["POST"])
 @login_required
 def play_cards():
-    #TODO --> need to build the front end to start sending these
+    # TODO --> need to build the front end to start sending these
     # find out the action
     if session["game"]:
         if not request.is_json:
@@ -97,7 +138,7 @@ def play_cards():
             except:
                 raise
             # now set this as default action in case it fails to match any action below
-            response = {'action':action, 'action_result':False, 'action_message':"unknown action " + action}
+            response = {'action':action, 'action_result':False, 'action_message':"unknown action :" + action}
 
             # at least we've got a candidate action - let's reload the game state from teh database
             game = session["game"]
@@ -146,38 +187,20 @@ def play_cards():
 @app.route("/checkstate", methods=["GET", "POST"])
 @login_required
 def checkstate():
-    """ returns true or false if the latest checksum recorded for this game matches the one submitted by the client """
-    response = {'action':'checkstate', 'action_result':False, 'action_message':"no checksum specified - use JSON POST or /checkstate?checksum="}
-    if request.method == "POST":
-        if request.is_json:
-            request_json = request.get_json(cache=False)
-            try:
-                previous_checksum = request_json["checksum"]
-            except (KeyError, IndexError):
-                return json.dumps(response)
-            except:
-                raise
-        else:
-            return json.dumps(response)
-    else:
-        try:
-            previous_checksum = request.args.get("checksum")
-        except (KeyError, IndexError):
-            return json.dumps(response)
-        except:
-            raise
+    """ returns the latest checksum recorded for this game in the database,
+        and the latest held in game state in session """
     game = session["game"]
-    has_changed = {"action":"haschanged",
-                   "your_previous_checksum" : previous_checksum,
-                   "database_checksum": game.get_database_checksum(db),
-                   "current_checksum": game.checksum()}
-    return json.dumps(has_changed)
+    response = {"action":"haschanged",
+                "database_checksum": game.get_database_checksum(db)}
+    return json.dumps(response)
 
 
 @app.route("/getgamestate")
 @login_required
 def getgamestate():
-    """returns a JSON object to caller with a summary of the current state of the game"""
+    """returns a JSON object to caller with a summary of the current
+       state of the game, excluding sensitive information such as 
+       hidden cards, cards in other players' hands, or the deck"""
     game = session["game"]
     # set default response to indicate no active game
     game_state= {"active-game":False}
@@ -185,18 +208,17 @@ def getgamestate():
     allowed_moves = []
     # if we have an active game, use that
     if game:
-        #always reload in case other users have caused a state change
+        # always reload in case other users have caused a state change
         game.load(db)
         game_state = {'active-game':True,
-                        "state": game.state,
-                        "checksum":game.checksum()}
+                        "state": game.state}
         # calculate the allowed moves at this stage of teh game for this player
         allowed_moves  = game.calculate_player_allowed_actions()
         if allowed_moves["allowed_action"] == "lost":
-            #this will only just have been computed. Save.
+            # this will only just have been computed. Save.
             game.state.players_finished.append(session["user_id"])
             game.save(db)
-        #Construct an object which represents the parts of the game that we want to expose to users
+        # Construct an object which represents the parts of the game that we want to expose to users
         for player in game.players:
             players_state.append( player.summarise(session["user_id"]) )
     print(jsonpickle.encode(players_state, unpicklable=False))
@@ -225,12 +247,13 @@ def game_internals():
     resp.headers['Content-Type']= 'application/json'
     return resp
 
+
 @app.route("/startnewgame", methods=["GET", "POST"])
 @login_required
 def startnewgame():
     if request.method == "POST":
         # tehy have sent the new game definition
-        #no game - start one
+        # no game - start one
         # find out how many people the ywant
         # and validate the other new game properties
         if request.is_json:
@@ -238,41 +261,31 @@ def startnewgame():
             # start to parse it
             game=Game(session["user_id"])
             print("initiated a game")
-            parsed_value = game.parse_requested_config(request_json)
-            if parsed_value:
+            parsed_values, message = game.parse_requested_config(request_json)
+            if parsed_values:
                 game_id = game.save(db)
                 session["game_id"] = game.state.game_id
                 session["game"] = game
-                response = {"startnewgame":True, "new_game_id": game_id}
+                response = {"startnewgame":True,
+                            "new_game_id": game_id,
+                            "message": message}
                 return jsonpickle.dumps(response, unpicklable=False)
             else:
                 response = {"startnewgame": False,
-                "message": "duplicate values detected in special cards"}
+                            "message": message}
                 resp = make_response(jsonpickle.encode(response, unpicklable=False), 200)
                 resp.headers['Content-Type']= 'application/json'
                 return resp
         else:
             response = {"startnewgame": False,
-                            "message": "you must submit your message as a JSON encoded object"}
+                        "message": "you must submit your message as a JSON encoded object"}
             resp = make_response(jsonpickle.encode(response, unpicklable=False), 400)
             resp.headers['Content-Type']= 'application/json'
             return resp
-        print("request.is_json", request.is_json, "request", jsonpickle.dumps(request.get_json(cache=False), unpicklable=False))
-        """
-        game = Game(session["user_id"], [int(session["user_id"]),3])
-
-        game.deal()
-        #save the game
-        game_id = game.save(db)
-
-        print("game id:" + str(game_id))
-        session["game_id"] = game.state.game_id
-        session["game"] = game
-        return redirect(url_for('play'))"""
 
     else:
         # they want to start a new game
-        # send info about how to do it
+        # and have requested via http get
         return render_template("configure_new_game.html", game_options = Game.game_properties)
 
 @app.route("/play")

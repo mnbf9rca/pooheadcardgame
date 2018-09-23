@@ -1,4 +1,5 @@
 from cards import Card_Types, Card
+import jsonpickle 
 
 class Player:
     def __init__(self, ID):
@@ -31,10 +32,7 @@ class Player:
                                             player_id = self.ID,
                                             card_type = deck_type,
                                             game_id = game_id)
-        # if not result == None:
-        #     raise ValueError(f"error clearing cards for game_id '{game_id}' and player_id '{self.ID}' and card_type '{deck_type}' to database")
 
-        # persist each card
         i = 0
         for card in deck:
 
@@ -63,6 +61,7 @@ class Player:
 
     def save(self, database_connection, game_id):
         """saves the current player's gamew state, including registering this player as playing this game"""
+        print("saving player:", jsonpickle.dumps(self, unpicklable=True))
         self.persist_player_cards_to_database(self.face_down, database_connection = database_connection, game_id = game_id, deck_type = Card_Types.CARD_FACE_DOWN)
         self.persist_player_cards_to_database(self.face_up, database_connection = database_connection, game_id = game_id, deck_type = Card_Types.CARD_FACE_UP)
         self.persist_player_cards_to_database(self.hand, database_connection = database_connection, game_id = game_id, deck_type = Card_Types.CARD_HAND)

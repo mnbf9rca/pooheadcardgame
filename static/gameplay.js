@@ -7,28 +7,26 @@ var card_types = {  'f':"Face up",
                     'i': "pick pile"}
 
 var timer
-var prior_absolute_checksum = ""
+
 var prior_database_checksum = ""
-var prior_hash
+
 function enable_refresh_timer(){
     timer = setInterval(
         function(){
             check_state_change()
             //update_game_state()
         },
-        200  /* 10000 ms = 10 sec */
+        500  /* 10000 ms = 10 sec */
    );
 }
 
 function check_state_change(){
-    data = {"checksum": prior_absolute_checksum}
+    data = "get_checksum"
     $.postJSON("/checkstate",data,function(result){
 
         //console.log("checkstate", JSON.stringify(result))
-        if ((result["current_checksum"] != prior_absolute_checksum) ||
-            (result["database_checksum"] != prior_database_checksum)){
+        if (result["database_checksum"] != prior_database_checksum){
                 console.log("checksum changed")
-                prior_absolute_checksum = result["current_checksum"]
                 prior_database_checksum = result["database_checksum"]
                 update_game_state()
         }
@@ -158,9 +156,7 @@ function render_game(result){
     // find our player ID
     var this_player_id = state.this_player_id;
 
-    $('#player-id').html('You are player ' + this_player_id + '. There are ' + state["number_of_players"] +  ' players in this game. The next player is player with ID ' + state["play_order"][0]);
-
-    number_of_columns = state.number_of_players % 12
+    $('#player-id').html('Your player ID is ' + this_player_id + '. There are ' + state["number_of_players_joined"] +  ' players in this game. The next player is player with ID ' + state["play_order"][0]);
 
     // display player cards and return the current player's state as the return value
     this_player = display_players(players_state, this_player_id, allowed_moves)

@@ -5,7 +5,7 @@ $(document).ready(function(){
         $.postJSON("/startnewgame", $("#form").serializeArray(), function(result) {
 
             console.log(result);
-        }, "json")
+        }, "json");
     });
 
 });

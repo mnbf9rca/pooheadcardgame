@@ -1,3 +1,28 @@
+/* "table" rows */
+.row-head{
+    color: #495057;
+    background-color: #e9ecef;
+    border-color: #e9ecef;
+  }
+
+  nav .navbar-brand .brown
+  {
+      color: #8B4513;
+  }
+  
+
+.row-striped:nth-of-type(odd){
+    background-color: rgba(0,0,0,.05);;
+  }
+  
+.row-striped:nth-of-type(even){
+    background-color: #ffffff;
+  }
+
+.row-hover:hover {
+    background-color : #9aa7b3!important;
+  }
+
 .flex-div {
   display: flex;
   flex-wrap: wrap;
@@ -5,7 +30,6 @@
 
 }
 .flex-card {
-   /* flex-basis:25% ; */
   flex: 0 0 auto;
   min-width: 0;
   width: 25%;
@@ -14,7 +38,6 @@
 }
 
 .flex-card-20 {
-   /* flex-basis:25% ; */
   flex: 0 0 auto;
   min-width: 0;
   width: 20%;
@@ -22,7 +45,7 @@
   margin: 0;
 }
 
-
+/* everything below here was provided by CS50 */
 .half-size {
     max-width: 50%;
 }

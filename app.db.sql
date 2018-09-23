@@ -1,4 +1,5 @@
 BEGIN TRANSACTION;
+DROP TABLE IF EXISTS `users`;
 CREATE TABLE IF NOT EXISTS `users` (
 	`player_id`	INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
 	`player_name`	TEXT,
@@ -6,6 +7,7 @@ CREATE TABLE IF NOT EXISTS `users` (
 	`hash`	TEXT,
 	`username`	TEXT
 );
+DROP TABLE IF EXISTS `player_game_cards`;
 CREATE TABLE IF NOT EXISTS `player_game_cards` (
 	`player_id`	INTEGER NOT NULL,
 	`game_id`	INTEGER NOT NULL,
@@ -15,11 +17,13 @@ CREATE TABLE IF NOT EXISTS `player_game_cards` (
 	`card_sequence`	INTEGER NOT NULL,
 	PRIMARY KEY(`player_id`,`game_id`,`card_suit`,`card_rank`,`card_type`)
 );
+DROP TABLE IF EXISTS `player_game`;
 CREATE TABLE IF NOT EXISTS `player_game` (
 	`player_id`	INTEGER NOT NULL,
 	`game_id`	INTEGER NOT NULL,
 	PRIMARY KEY(`player_id`,`game_id`)
 );
+DROP TABLE IF EXISTS `games`;
 CREATE TABLE IF NOT EXISTS `games` (
 	`last_move_at`	DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	`last_player_id`	INTEGER,
@@ -38,8 +42,11 @@ CREATE TABLE IF NOT EXISTS `games` (
 	`play_on_anything_cards`	TEXT,
 	`players_finished`	TEXT,
 	`checksum`	TEXT,
+	`players_requested`	INTEGER,
+	`game_ready_to_start`	INTEGER,
 	PRIMARY KEY(`gameid`)
 );
+DROP TABLE IF EXISTS `game_cards`;
 CREATE TABLE IF NOT EXISTS `game_cards` (
 	`game_id`	INTEGER NOT NULL,
 	`card_location`	INTEGER NOT NULL,
