@@ -43,7 +43,14 @@ app.config["SESSION_TYPE"] = "filesystem"
 Session(app)
 
 # Configure Library to use SQLite database
-db = SQL("sqlite:///app.db")
+
+#db = SQL("sqlite:///app.db")
+
+# from https://cloud.google.com/appengine/docs/flexible/python/using-cloud-sql
+# Environment variables are defined in app.yaml.
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['SQLALCHEMY_DATABASE_URI']
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQL(app.config['SQLALCHEMY_DATABASE_URI'])
 
 
 @app.route("/")
