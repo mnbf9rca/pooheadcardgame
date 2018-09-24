@@ -5,7 +5,8 @@ CREATE TABLE IF NOT EXISTS `users` (
 	`player_name`	TEXT,
 	`last_played_at`	DATETIME DEFAULT CURRENT_TIMESTAMP,
 	`hash`	TEXT,
-	`username`	TEXT
+	`username`	TEXT,
+	`is_admin`	INTEGER DEFAULT 0
 );
 DROP TABLE IF EXISTS `player_game_cards`;
 CREATE TABLE IF NOT EXISTS `player_game_cards` (
@@ -26,7 +27,6 @@ CREATE TABLE IF NOT EXISTS `player_game` (
 DROP TABLE IF EXISTS `games`;
 CREATE TABLE IF NOT EXISTS `games` (
 	`last_move_at`	DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-	`last_player_id`	INTEGER,
 	`less_than_card`	INTEGER,
 	`transparent_card`	INTEGER,
 	`burn_card`	INTEGER,
@@ -44,6 +44,8 @@ CREATE TABLE IF NOT EXISTS `games` (
 	`checksum`	TEXT,
 	`players_requested`	INTEGER,
 	`game_ready_to_start`	INTEGER,
+	`game_finished`	INTEGER,
+	`deal_done`	INTEGER,
 	PRIMARY KEY(`gameid`)
 );
 DROP TABLE IF EXISTS `game_cards`;
