@@ -5,3 +5,10 @@
 5. redirect on successful creation of new game --> done
 6. notify when my game is ready to join
 7. replace sqlite with ??
+
+put credentials in metadata store so i can save app.yaml to github
+https://medium.com/google-cloud/google-compute-engine-metadata-service-de9d71ea44e0
+https://stackoverflow.com/questions/31688646/get-the-name-or-id-of-the-current-google-compute-instance
+
+use custom domain name
+https://cloud.google.com/appengine/docs/flexible/python/mapping-custom-domains
