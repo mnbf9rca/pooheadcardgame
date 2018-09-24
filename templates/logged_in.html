@@ -7,7 +7,9 @@ Play cards!
 {% block main %}
 
 <p class="card-text" id="game-id">Your player ID {{session["user_id"]}}.</p>
-<div>{{message}}</div>
+{% if message %}
+<div class='alert alert-primary' role='alert'>{{message}}</div>
+{% endif %}
 <div>you're logged in. here's a list of your current games:
 
     <div class="container">
@@ -24,12 +26,12 @@ Play cards!
                     <div class="col">
                         Game finished?
                     </div>
-        
+
                     <div class="col">
                         Game ready to start?
                     </div>
                     <div class="col">
-                        
+
                     </div>
                 </div>
         {% for g in games %}
@@ -74,12 +76,12 @@ Play cards!
                     <div class="col">
                         Game finished?
                     </div>
-        
+
                     <div class="col">
                         Game ready to start?
                     </div>
                     <div class="col">
-                        
+
                     </div>
                 </div>
         {% for g in new_games %}

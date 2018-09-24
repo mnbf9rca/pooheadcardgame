@@ -71,11 +71,11 @@ class Game(object):
         self.players.append(Player(this_player_id))
 
     def add_players_to_game(self, player_id, database_connection):
-        """Checks if there's enough space left in this game, and 
+        """Checks if there's enough space left in this game, and
            that this player is not already in the list,
-           adds the selected player ID""" 
+           adds the selected player ID"""
 
-        if (not self.ready_to_start and 
+        if (not self.ready_to_start and
              len(list(set(player.ID for player in self.players) - set([player_id])))== len(self.players) ):
 
             player_to_add = Player(player_id)
@@ -276,23 +276,21 @@ class Game(object):
 
     def save(self, database_connection):
         """saves the current state of the game. If this is a new game without an ID, it creates one, otherwise it updates the existing one"""
+        # trans = database_connection.execute("BEGIN TRANSACTION;")
         if not self.state.game_id:
             querystring = "INSERT INTO games (game_finished, players_requested, game_ready_to_start, checksum, players_finished, play_on_anything_cards, play_order, less_than_card, transparent_card, burn_card, reset_card, number_of_decks, number_face_down_cards, number_hand_cards, current_turn_number, players_ready_to_start, deal_done, gameid) VALUES (:game_finished, :number_of_players_requested, :game_ready_to_start, :checksum, :players_finished, :play_on_anything_cards,:play_order,:less_than_card,:transparent_card,:burn_card,:reset_card,:number_of_decks,:number_face_down_cards,:number_hand_cards,:current_turn_number,:players_ready_to_start, :deal_done, :game_id)"
 
         else:
             querystring = "UPDATE games SET game_finished = :game_finished, players_requested = :number_of_players_requested, game_ready_to_start = :game_ready_to_start, checksum = :checksum, players_finished = :players_finished, play_on_anything_cards = :play_on_anything_cards, play_order = :play_order, less_than_card = :less_than_card, transparent_card = :transparent_card, burn_card = :burn_card, reset_card = :reset_card, number_of_decks = :number_of_decks, number_face_down_cards = :number_face_down_cards ,number_hand_cards = :number_hand_cards,current_turn_number = :current_turn_number, players_ready_to_start = :players_ready_to_start, deal_done = :deal_done WHERE gameid = :game_id"
-
+        print("self.ready_to_start", self.ready_to_start, self.ready_to_start==True)
         result = database_connection.execute(querystring,
                                              game_finished=self.state.game_finished,
                                              number_of_players_requested=self.state.number_of_players_requested,
-                                             game_ready_to_start=self.ready_to_start,
+                                             game_ready_to_start = self.ready_to_start,
                                              checksum=self.checksum(),
-                                             players_finished=json.dumps(
-                                                 self.state.players_finished),
-                                             play_on_anything_cards=json.dumps(
-                                                 self.state.play_on_anything_cards),
-                                             play_order=json.dumps(
-                                                 self.state.play_order),
+                                             players_finished=json.dumps(self.state.players_finished),
+                                             play_on_anything_cards=json.dumps(self.state.play_on_anything_cards),
+                                             play_order=json.dumps(self.state.play_order),
                                              less_than_card=self.state.less_than_card,
                                              transparent_card=self.state.transparent_card,
                                              burn_card=self.state.burn_card,
@@ -301,21 +299,26 @@ class Game(object):
                                              number_face_down_cards=self.state.number_face_down_cards,
                                              number_hand_cards=self.state.number_hand_cards,
                                              current_turn_number=self.state.current_turn_number,
-                                             players_ready_to_start=json.dumps(
-                                                 self.state.players_ready_to_start),
+                                             players_ready_to_start=json.dumps(self.state.players_ready_to_start),
                                              deal_done = self.state.deal_done,
                                              game_id=self.state.game_id)
 
+       # if not result:
+            #database_connection.execute("ROLLBACK")
         if not(self.state.game_id):
             self.state.game_id = result
 
         if not self.__persist_cards_to_database(deck=self.cards.pile_deck, deck_type=str(Game.PILE_DECK), game_id=str(self.state.game_id), database_connection=database_connection):
+            #database_connection.execute("ROLLBACK")
             raise ValueError('error persisting Game.PILE_DECK to database')
         if not self.__persist_cards_to_database(deck=self.cards.pile_burn, deck_type=str(Game.PILE_BURN), game_id=str(self.state.game_id), database_connection=database_connection):
+            #database_connection.execute("ROLLBACK")
             raise ValueError('error persisting Game.PILE_BURN to database')
         if not self.__persist_cards_to_database(deck=self.cards.pile_played, deck_type=str(Game.PILE_PLAYED), game_id=str(self.state.game_id), database_connection=database_connection):
+            #database_connection.execute("ROLLBACK")
             raise ValueError('error persisting Game.PILE_PLAYED to database')
         if not self.__persist_cards_to_database(deck=self.cards.pile_pick, deck_type=str(Game.PILE_PICK), game_id=str(self.state.game_id), database_connection=database_connection):
+            #database_connection.execute("ROLLBACK")
             raise ValueError('error persisting Game.PILE_PICK to database')
 
         for player in self.players:
@@ -325,6 +328,7 @@ class Game(object):
             if player.ID == self.state.this_player_id:
                 self.this_player = player
 
+        #database_connection.execute("COMMIT")
         # return the game_id for future use
         return self.state.game_id
 
@@ -633,8 +637,8 @@ class Game(object):
         return True
 
     def __can_play_cards(self, cards_to_check):
-        """checks whether the card/cards can be played e.g. does 
-           the user have ANY cards in their hand which can be played 
+        """checks whether the card/cards can be played e.g. does
+           the user have ANY cards in their hand which can be played
            on the current played stack, or can the cards in the user's play
            list be played on teh current played stack"""
         print("cards", jsonpickle.dumps(cards_to_check))

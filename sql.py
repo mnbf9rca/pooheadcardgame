@@ -150,11 +150,13 @@ class SQL(object):
         # Allow only one statement at a time
         # SQLite does not support executing many statements
         # https://docs.python.org/3/library/sqlite3.html#sqlite3.Cursor.execute
-        if len(sqlparse.split(text)) > 1:
+        if (len(sqlparse.split(text)) > 1 and
+            self.engine.url.get_backend_name() == "sqlite"):
             raise RuntimeError("too many statements at once")
 
         # Raise exceptions for warnings
         warnings.filterwarnings("error")
+
 
         # Prepare, execute statement
         try:
@@ -168,6 +170,13 @@ class SQL(object):
                 # Translate None to NULL
                 if value is None:
                     value = sqlalchemy.sql.null()
+
+                if self.engine.url.get_backend_name() == "sqlite":
+                     # for some reason, bool isnt being converted to int
+                     if value == True:
+                        value = 1
+                     elif value == False:
+                        value = 0
 
                 # Bind parameters before statement reaches database, so that bound parameters appear in exceptions
                 # http://docs.sqlalchemy.org/en/latest/core/sqlelement.html#sqlalchemy.sql.expression.text

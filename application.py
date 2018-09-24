@@ -11,6 +11,7 @@ from cards import Card, Deck
 from game import Game, get_users_for_game, get_list_of_games_for_this_user, get_list_of_games_looking_for_players
 # from https://github.com/cs50/python-cs50
 from helpers import apology, login_required, lookup
+from application_helpers import admin_user_required
 from player import Player
 # from https://github.com/cs50/python-cs50
 from sql import SQL
@@ -64,7 +65,7 @@ def logged_in():
         pass
     except:
         raise
-    
+
     games = get_list_of_games_for_this_user(session["user_id"], db)
     new_games = get_list_of_games_looking_for_players(session["user_id"], db)
     return render_template("logged_in.html", games=games, new_games=new_games, message = message)
@@ -79,20 +80,20 @@ def load_game():
 
     # check the users playing this game
 
-    g = Game(session["user_id"])
-    session["game"] = g
+    game = Game(session["user_id"])
+    session["game"] = game
 
-    g.state.game_id = game_id
-    session["game_id"] = g.state.game_id
- 
+    game.state.game_id = game_id
+    session["game_id"] = game.state.game_id
+
 
     message = "Loaded the game, but it's not ready to start yet. Wait for other players."
     players = get_users_for_game(game_id, db)
     print("players loaded: " + str(players))
-    g.players = []
+    game.players = []
     for player in players:
-        g.players.append(Player(player)) 
-    g.load(db)
+        game.players.append(Player(player))
+    game.load(db)
     add = None
     try:
         add = request.args["add"]
@@ -104,16 +105,16 @@ def load_game():
     if add:
         # looking to add themselves to this game
         # check whether this is allowed.
-        if not g.add_players_to_game(session["user_id"], db):
+        if not game.add_players_to_game(session["user_id"], db):
             message = quote_plus("could not add you to the game")
             return redirect(url_for("logged_in") + f"?msg={message}")
         else:
             message = "Added you to the game. Now sit tight and wait for enough other players to join."
-    
-    if g.ready_to_start:
-        if not g.state.deal_done:
-            g.deal()
-            g.save(db)
+
+    if game.ready_to_start:
+        if not game.state.deal_done:
+            game.deal()
+            game.save(db)
         return redirect("/play")
     else:
         msg = quote_plus(message)
@@ -199,7 +200,7 @@ def checkstate():
 @login_required
 def getgamestate():
     """returns a JSON object to caller with a summary of the current
-       state of the game, excluding sensitive information such as 
+       state of the game, excluding sensitive information such as
        hidden cards, cards in other players' hands, or the deck"""
     game = session["game"]
     # set default response to indicate no active game
@@ -235,7 +236,7 @@ def getgamestate():
 
 
 @app.route("/game_internals")
-@login_required
+@admin_user_required
 def game_internals():
     game = session["game"]
     if game:
@@ -266,9 +267,12 @@ def startnewgame():
                 game_id = game.save(db)
                 session["game_id"] = game.state.game_id
                 session["game"] = game
+                msg = quote_plus(f"Game created successfully with ID {game.state.game_id}. Now let's wait for some other players to join.")
+                print("msg",msg)
                 response = {"startnewgame":True,
                             "new_game_id": game_id,
-                            "message": message}
+                            "message": message,
+                            "redirect": url_for("logged_in") + f"?msg={msg}"}
                 return jsonpickle.dumps(response, unpicklable=False)
             else:
                 response = {"startnewgame": False,
@@ -326,7 +330,7 @@ def login():
             return apology("must provide password", 403)
 
         # Query database for username
-        rows = db.execute("SELECT player_id, hash FROM users WHERE username = :username",
+        rows = db.execute("SELECT player_id, hash, is_admin FROM users WHERE username = :username",
                           username=request.form.get("username").lower())
 
         # Ensure username exists and password is correct
@@ -335,6 +339,7 @@ def login():
 
         # Remember which user has logged in
         session["user_id"] = rows[0]["player_id"]
+        session["is_admin"] = rows[0]["is_admin"]
         session["game_id"] = None
         session["game"] = None
 
@@ -351,8 +356,8 @@ def logout():
     """Log user out"""
     if "game" in session:
         if session["game"]:
-            g = session["game"]
-            g.save(db)
+            game = session["game"]
+            game.save(db)
     # Forget any user_id
     session.clear()
 
@@ -398,9 +403,6 @@ def register():
     # User reached route via GET (as by clicking a link or via redirect)
     else:
         return render_template("register.html")
-
-
-
 
 def errorhandler(e):
     """Handle error"""

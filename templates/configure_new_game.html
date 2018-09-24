@@ -15,6 +15,7 @@
 
 <form  id='form'>
     <h2>Create a new game</h2>
+    <div id='alert-placeholder'></div>
     <div>Please choose how to configure the game</div>
 
 {% for card_type in game_options.special_cards %}
@@ -44,7 +45,7 @@
                 <label class="custom-control-label" for="{{card_type.code}}-on-anything">Can play on anything</label>
             </div>
             </div>
-        
+
         </div>
 
 {% endfor %}
