@@ -25,10 +25,11 @@ class Player:
                             'hand_cards':hand_cards}
         return player_summary
 
-    def persist_player_cards_to_database(self, deck = [], *args, database_connection, game_id, deck_type):
+    def persist_player_cards_to_database(self, deck = [], *args, database_connection, trans_connection = None, game_id, deck_type):
         """save a given deck"""
         # clear existing records
         database_connection.execute("DELETE FROM player_game_cards WHERE player_id = :player_id AND card_type=:card_type AND game_id = :game_id",
+                                            trans_connection = trans_connection, 
                                             player_id = self.ID,
                                             card_type = deck_type,
                                             game_id = game_id)
@@ -37,6 +38,7 @@ class Player:
         for card in deck:
 
             result = database_connection.execute("INSERT INTO player_game_cards (player_id, game_id, card_type, card_suit, card_rank, card_sequence) VALUES (:player_id, :game_id, :card_type, :card_suit, :card_rank, :card_sequence)",
+                                                    trans_connection = trans_connection, 
                                                     player_id = self.ID,
                                                     game_id = game_id,
                                                     card_type = deck_type,
@@ -59,12 +61,12 @@ class Player:
         print("returning " + str(len(cards_to_return)))
         return cards_to_return
 
-    def save(self, database_connection, game_id):
+    def save(self, database_connection, game_id, trans_connection = None):
         """saves the current player's gamew state, including registering this player as playing this game"""
         print("saving player:", jsonpickle.dumps(self, unpicklable=True))
-        self.persist_player_cards_to_database(self.face_down, database_connection = database_connection, game_id = game_id, deck_type = Card_Types.CARD_FACE_DOWN)
-        self.persist_player_cards_to_database(self.face_up, database_connection = database_connection, game_id = game_id, deck_type = Card_Types.CARD_FACE_UP)
-        self.persist_player_cards_to_database(self.hand, database_connection = database_connection, game_id = game_id, deck_type = Card_Types.CARD_HAND)
+        self.persist_player_cards_to_database(self.face_down, database_connection = database_connection, trans_connection = trans_connection, game_id = game_id, deck_type = Card_Types.CARD_FACE_DOWN)
+        self.persist_player_cards_to_database(self.face_up, database_connection = database_connection, trans_connection = trans_connection, game_id = game_id, deck_type = Card_Types.CARD_FACE_UP)
+        self.persist_player_cards_to_database(self.hand, database_connection = database_connection, trans_connection = trans_connection, game_id = game_id, deck_type = Card_Types.CARD_HAND)
         database_connection.execute('REPLACE INTO player_game (player_id, game_id) VALUES (:user_id, :game_id)',
                             user_id= self.ID,
                             game_id = game_id)

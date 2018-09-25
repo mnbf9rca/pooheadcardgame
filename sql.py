@@ -10,6 +10,7 @@ import sqlparse
 import sys
 import termcolor
 import warnings
+import jsonpickle
 
 
 class SQL(object):
@@ -86,7 +87,7 @@ class SQL(object):
         # Default
         return str(e)
 
-    def execute(self, text, **params):
+    def execute(self, text, trans_connection = None, **params):
         """
         Execute a SQL statement.
         """
@@ -186,13 +187,17 @@ class SQL(object):
             # Stringify bound parameters
             # http://docs.sqlalchemy.org/en/latest/faq/sqlexpressions.html#how-do-i-render-sql-expressions-as-strings-possibly-with-bound-parameters-inlined
             statement = str(statement.compile(compile_kwargs={"literal_binds": True}))
+            
 
             # Statement for logging
             log = re.sub(r"\n\s*", " ", sqlparse.format(statement, reindent=True))
 
             # Execute statement
-            result = self.engine.execute(statement)
-
+            if trans_connection:
+                result = trans_connection.execute(statement)
+            else:
+                result = self.engine.execute(statement)
+            
             # If SELECT (or INSERT with RETURNING), return result set as list of dict objects
             if re.search(r"^\s*SELECT", statement, re.I):
 
@@ -207,7 +212,13 @@ class SQL(object):
 
             # If INSERT, return primary key value for a newly inserted row
             elif re.search(r"^\s*INSERT", statement, re.I):
-                if self.engine.url.get_backend_name() in ["postgres", "postgresql"]:
+                if result.rowcount > 0:
+                    # more than one record affected; return true as cant return multiple primary keys
+                    # also - be aware that this is only rows MATCHED, not the actual count
+                    # (http://docs.sqlalchemy.org/en/latest/core/connections.html#sqlalchemy.engine.ResultProxy.rowcount)
+                    # so it's a bit of a hack
+                    return True
+                elif self.engine.url.get_backend_name() in ["postgres", "postgresql"]:
                     result = self.engine.execute(sqlalchemy.text("SELECT LASTVAL()"))
                     ret = result.first()[0]
                 else:

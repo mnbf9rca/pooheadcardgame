@@ -26,6 +26,7 @@ import requests
 # Configure application
 app = Flask(__name__)
 sslify = SSLify(app)
+sslify = SSLify(app, permanent=True)
 
 # Ensure templates are auto-reloaded
 app.config["TEMPLATES_AUTO_RELOAD"] = True
