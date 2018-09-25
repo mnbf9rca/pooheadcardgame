@@ -238,7 +238,7 @@ class Game(object):
         """loads the 'checksum' field from teh database for the current game and returns it"""
         config = database_connection.execute('SELECT checksum FROM games WHERE gameid = :game_id',
                                              game_id=self.state.game_id)
-        database_checksum = config[0]["checksum"]
+        database_checksum = config[0]["game_checksum"]
         return database_checksum
 
     def checksum(self):
@@ -280,18 +280,17 @@ class Game(object):
         trans_connection = database_connection.engine.connect()
         trans = trans_connection.begin()
         if not self.state.game_id:
-            querystring = "INSERT INTO games (game_finished, players_requested, game_ready_to_start, checksum, players_finished, play_on_anything_cards, play_order, less_than_card, transparent_card, burn_card, reset_card, number_of_decks, number_face_down_cards, number_hand_cards, current_turn_number, players_ready_to_start, deal_done, gameid) VALUES (:game_finished, :number_of_players_requested, :game_ready_to_start, :checksum, :players_finished, :play_on_anything_cards,:play_order,:less_than_card,:transparent_card,:burn_card,:reset_card,:number_of_decks,:number_face_down_cards,:number_hand_cards,:current_turn_number,:players_ready_to_start, :deal_done, :game_id)"
+            querystring = "INSERT INTO games (game_finished, players_requested, game_ready_to_start, game_checksum, players_finished, play_on_anything_cards, play_order, less_than_card, transparent_card, burn_card, reset_card, number_of_decks, number_face_down_cards, number_hand_cards, current_turn_number, players_ready_to_start, deal_done, gameid) VALUES (:game_finished, :number_of_players_requested, :game_ready_to_start, :checksum, :players_finished, :play_on_anything_cards,:play_order,:less_than_card,:transparent_card,:burn_card,:reset_card,:number_of_decks,:number_face_down_cards,:number_hand_cards,:current_turn_number,:players_ready_to_start, :deal_done, :game_id)"
 
         else:
-            querystring = "UPDATE games SET game_finished = :game_finished, players_requested = :number_of_players_requested, game_ready_to_start = :game_ready_to_start, checksum = :checksum, players_finished = :players_finished, play_on_anything_cards = :play_on_anything_cards, play_order = :play_order, less_than_card = :less_than_card, transparent_card = :transparent_card, burn_card = :burn_card, reset_card = :reset_card, number_of_decks = :number_of_decks, number_face_down_cards = :number_face_down_cards ,number_hand_cards = :number_hand_cards,current_turn_number = :current_turn_number, players_ready_to_start = :players_ready_to_start, deal_done = :deal_done WHERE gameid = :game_id"
-        print("self.ready_to_start", self.ready_to_start,
-              self.ready_to_start == True)
+            querystring = "UPDATE games SET game_finished = :game_finished, players_requested = :number_of_players_requested, game_ready_to_start = :game_ready_to_start, game_checksum = :game_checksum, players_finished = :players_finished, play_on_anything_cards = :play_on_anything_cards, play_order = :play_order, less_than_card = :less_than_card, transparent_card = :transparent_card, burn_card = :burn_card, reset_card = :reset_card, number_of_decks = :number_of_decks, number_face_down_cards = :number_face_down_cards ,number_hand_cards = :number_hand_cards,current_turn_number = :current_turn_number, players_ready_to_start = :players_ready_to_start, deal_done = :deal_done WHERE gameid = :game_id"
+
         result = database_connection.execute(querystring,
                                              trans_connection=trans_connection,
                                              game_finished=self.state.game_finished,
                                              number_of_players_requested=self.state.number_of_players_requested,
                                              game_ready_to_start=self.ready_to_start,
-                                             checksum=self.checksum(),
+                                             game_checksum=self.checksum(),
                                              players_finished=json.dumps(
                                                  self.state.players_finished),
                                              play_on_anything_cards=json.dumps(
