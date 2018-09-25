@@ -212,7 +212,6 @@ class SQL(object):
 
             # If INSERT, return primary key value for a newly inserted row
             elif re.search(r"^\s*INSERT", statement, re.I):
-                print("result.rowcount:", result.rowcount)
                 if result.rowcount > 1:
                     # more than one record affected; return true as cant return multiple primary keys
                     # also - be aware that this is only rows MATCHED, not the actual count
