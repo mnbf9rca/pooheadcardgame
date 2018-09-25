@@ -37,14 +37,23 @@ class Player:
         i = 0
         for card in deck:
 
-            result = database_connection.execute("INSERT INTO player_game_cards (player_id, game_id, card_type, card_suit, card_rank, card_sequence) VALUES (:player_id, :game_id, :card_type, :card_suit, :card_rank, :card_sequence)",
-                                                    trans_connection = trans_connection, 
-                                                    player_id = self.ID,
-                                                    game_id = game_id,
-                                                    card_type = deck_type,
-                                                    card_suit = card.suit,
-                                                    card_rank = card.rank,
-                                                    card_sequence = i)
+            #result = database_connection.execute("INSERT INTO player_game_cards (player_id, game_id, card_type, card_suit, card_rank, card_sequence) VALUES (:player_id, :game_id, :card_type, :card_suit, :card_rank, :card_sequence)",
+            #                                        trans_connection = trans_connection, 
+            #                                        player_id = self.ID,
+            #                                        game_id = game_id,
+            #                                        card_type = deck_type,
+            #                                        card_suit = card.suit,
+            #                                        card_rank = card.rank,
+            #                                        card_sequence = i)
+            cards = []
+            i = 0
+            for card in deck:
+                cards.append(f"({self.ID}, {game_id}, {deck_type}, {card.suit}, {card.rank}, {i})")
+                i += 1
+            cards = ", ".join(cards)
+            result = database_connection.execute("INSERT INTO player_game_cards (player_id, game_id, card_type, card_suit, card_rank, card_sequence) VALUES" + cards + ";", trans_connection = trans_connection)
+
+                                                    
             if not(result):
                 raise ValueError(f"error persisting cards for game_id '{game_id}' and player_id '{self.ID}' and card_type '{deck_type}' and card_suit '{card.suit}' and card_rank '{card.rank}' at sequence '{i}' to database")
             i += 1

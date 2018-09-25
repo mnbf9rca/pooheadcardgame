@@ -782,13 +782,6 @@ class Game(object):
             i = 0
             for card in deck:
                 cards.append(f"({game_id}, {deck_type}, {card.suit}, {card.rank}, {i})")
-                
-                #database_connection.execute("INSERT INTO game_cards (game_id, card_location, card_suit, card_rank, card_sequence) VALUES (:game_id, :deck_type, :card_suit, :card_rank, :i)",
-                #                                     game_id=game_id,
-                #                                     deck_type=deck_type,
-                #                                     card_suit=card.suit,
-                #                                     card_rank=card.rank,
-                #                                     i=i)
 
                 i += 1
             cards = ", ".join(cards)
