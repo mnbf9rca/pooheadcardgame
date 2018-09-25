@@ -237,7 +237,7 @@ class Game(object):
 
     def get_database_checksum(self, database_connection):
         """loads the 'checksum' field from teh database for the current game and returns it"""
-        config = database_connection.execute('SELECT checksum FROM games WHERE gameid = :game_id',
+        config = database_connection.execute('SELECT game_checksum FROM games WHERE gameid = :game_id',
                                              game_id=self.state.game_id)
         database_checksum = config[0]["game_checksum"]
         return database_checksum
