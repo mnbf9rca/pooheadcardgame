@@ -165,6 +165,7 @@ class SQL(object):
             # Construct a new TextClause clause
             statement = sqlalchemy.text(text)
 
+
             # Iterate over parameters
             for key, value in params.items():
 
@@ -187,14 +188,15 @@ class SQL(object):
             # Stringify bound parameters
             # http://docs.sqlalchemy.org/en/latest/faq/sqlexpressions.html#how-do-i-render-sql-expressions-as-strings-possibly-with-bound-parameters-inlined
             statement = str(statement.compile(compile_kwargs={"literal_binds": True}))
-            
 
             # Statement for logging
             log = re.sub(r"\n\s*", " ", sqlparse.format(statement, reindent=True))
 
             # Execute statement
             if trans_connection:
+                print(f"Attempting to execute transactional query: {statement}")
                 result = trans_connection.execute(statement)
+                print("completed transactional query")
             else:
                 result = self.engine.execute(statement)
             

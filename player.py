@@ -27,11 +27,12 @@ class Player:
                           'hand_cards': hand_cards}
         return player_summary
 
-    def persist_player_cards_to_database(self, deck=[], *args, database_connection, trans_connection=None, game_id, deck_type):
+    def persist_player_cards_to_database(self, deck=[], *args, database_connection, game_id, deck_type, trans_connection=None):
         """save a given deck"""
         # clear existing records
+        result = False
         database_connection.execute("DELETE FROM player_game_cards WHERE player_id = :player_id AND card_type=:card_type AND game_id = :game_id",
-                                    trans_connection=trans_connection,
+                                    trans_connection = trans_connection,
                                     player_id=self.ID,
                                     card_type=deck_type,
                                     game_id=game_id)
@@ -41,14 +42,20 @@ class Player:
             cards.append(
                 f"({self.ID}, {game_id}, {deck_type}, {card.suit}, {card.rank}, {i})")
             i += 1
-        cards = ", ".join(cards)
-        result = database_connection.execute(
-            f"INSERT INTO player_game_cards (player_id, game_id, card_type, card_suit, card_rank, card_sequence) VALUES {cards};", 
-            trans_connection=trans_connection)
+        if cards:
+            cards = ", ".join(cards)
+            result = database_connection.execute(
+                f"INSERT INTO player_game_cards (player_id, game_id, card_type, card_suit, card_rank, card_sequence) VALUES {cards};",
+                trans_connection = trans_connection)
+        else:
+            # no cards - return true
+            result = True
 
-        if result:
+        if not result:
+            trans_connection.rollback()
+            trans_connection.close()
             raise ValueError(
-                f"error persisting cards for game_id '{game_id}' and player_id '{self.ID}' and card_type '{deck_type}''")
+                f"error persisting cards for game_id '{game_id}' and player_id '{self.ID}' and card_type '{deck_type}''",)
         else:
             return result
 
@@ -66,22 +73,22 @@ class Player:
         print("returning " + str(len(cards_to_return)))
         return cards_to_return
 
-    def save(self, database_connection, game_id, trans_connection=None):
+    def save(self, database_connection, game_id, trans_connection = None):
         """saves the current player's game state, including registering this player as playing this game"""
         print("saving player:", jsonpickle.dumps(self, unpicklable=True))
         self.persist_player_cards_to_database(self.face_down,
                                               database_connection=database_connection,
-                                              trans_connection=trans_connection,
+                                              trans_connection = trans_connection,
                                               game_id=game_id,
                                               deck_type=Card_Types.CARD_FACE_DOWN)
         self.persist_player_cards_to_database(self.face_up,
                                               database_connection=database_connection,
-                                              trans_connection=trans_connection,
+                                              trans_connection = trans_connection,
                                               game_id=game_id,
                                               deck_type=Card_Types.CARD_FACE_UP)
         self.persist_player_cards_to_database(self.hand,
                                               database_connection=database_connection,
-                                              trans_connection=trans_connection,
+                                              trans_connection = trans_connection,
                                               game_id=game_id,
                                               deck_type=Card_Types.CARD_HAND)
         database_connection.execute('REPLACE INTO player_game (player_id, game_id) VALUES (:user_id, :game_id)',

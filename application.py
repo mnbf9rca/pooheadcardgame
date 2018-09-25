@@ -191,6 +191,7 @@ def play_cards():
 
                 # we have a action_cards object - submit to game
                 response = game.swap_cards(cards, player)
+                print("returned from game.swap_cards")
 
             elif action == "no_swap":
                 # player has opted to play without swapping
@@ -210,11 +211,13 @@ def play_cards():
             elif action == "pick":
                 # player has to pick up the cards
                 response = game.play_pick_up()
-
+            
             if response["action_result"]:
                 # if any of the items above report success, save state
+                print("about to save game from /playcards")
                 game.save(db)
                 print("saved game")
+        
     else:
         response = {'action':"any", 'action_result':False, 'action_message':"no active game"}
     return json.dumps(response)

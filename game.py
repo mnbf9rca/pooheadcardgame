@@ -5,6 +5,7 @@ import json
 import jsonpickle
 from zlib import crc32
 from random import shuffle
+from sqlalchemy.orm import sessionmaker
 
 
 class Game(object):
@@ -256,17 +257,17 @@ class Game(object):
 
         # although cards are shuffled and so it doesnt really matter
         # follow convention and deal face down, then face up, then hand cards
-        for deal in range(self.state.number_face_down_cards):
+        for _ in range(self.state.number_face_down_cards):
             for player in self.players:
                 player.face_down.append(new_deck.deal())
 
         # number face down cards = number face up cards
-        for deal in range(self.state.number_face_down_cards):
+        for _ in range(self.state.number_face_down_cards):
             for player in self.players:
                 player.face_up.append(new_deck.deal())
 
         # hand cards
-        for deal in range(self.state.number_hand_cards):
+        for _ in range(self.state.number_hand_cards):
             for player in self.players:
                 player.hand.append(new_deck.deal())
 
@@ -277,14 +278,20 @@ class Game(object):
 
     def save(self, database_connection):
         """saves the current state of the game. If this is a new game without an ID, it creates one, otherwise it updates the existing one"""
-        trans_connection = database_connection.engine.connect()
-        trans = trans_connection.begin()
+        print("beginning game save")
+        
+        Session = sessionmaker(bind=database_connection.engine)
+        trans_connection = Session()
+        # trans = trans_connection.begin()
+
+        print("started transaction")
         if not self.state.game_id:
-            querystring = "INSERT INTO games (game_finished, players_requested, game_ready_to_start, game_checksum, players_finished, play_on_anything_cards, play_order, less_than_card, transparent_card, burn_card, reset_card, number_of_decks, number_face_down_cards, number_hand_cards, current_turn_number, players_ready_to_start, deal_done, gameid) VALUES (:game_finished, :number_of_players_requested, :game_ready_to_start, :checksum, :players_finished, :play_on_anything_cards,:play_order,:less_than_card,:transparent_card,:burn_card,:reset_card,:number_of_decks,:number_face_down_cards,:number_hand_cards,:current_turn_number,:players_ready_to_start, :deal_done, :game_id)"
+            querystring = "INSERT INTO games (game_finished, players_requested, game_ready_to_start, game_checksum, players_finished, play_on_anything_cards, play_order, less_than_card, transparent_card, burn_card, reset_card, number_of_decks, number_face_down_cards, number_hand_cards, current_turn_number, players_ready_to_start, deal_done, gameid) VALUES (:game_finished, :number_of_players_requested, :game_ready_to_start, :game_checksum, :players_finished, :play_on_anything_cards,:play_order,:less_than_card,:transparent_card,:burn_card,:reset_card,:number_of_decks,:number_face_down_cards,:number_hand_cards,:current_turn_number,:players_ready_to_start, :deal_done, :game_id)"
 
         else:
             querystring = "UPDATE games SET game_finished = :game_finished, players_requested = :number_of_players_requested, game_ready_to_start = :game_ready_to_start, game_checksum = :game_checksum, players_finished = :players_finished, play_on_anything_cards = :play_on_anything_cards, play_order = :play_order, less_than_card = :less_than_card, transparent_card = :transparent_card, burn_card = :burn_card, reset_card = :reset_card, number_of_decks = :number_of_decks, number_face_down_cards = :number_face_down_cards ,number_hand_cards = :number_hand_cards,current_turn_number = :current_turn_number, players_ready_to_start = :players_ready_to_start, deal_done = :deal_done WHERE gameid = :game_id"
 
+        print(f"calling database.execute for {querystring}")
         result = database_connection.execute(querystring,
                                              trans_connection=trans_connection,
                                              game_finished=self.state.game_finished,
@@ -310,10 +317,13 @@ class Game(object):
                                              deal_done=self.state.deal_done,
                                              game_id=self.state.game_id)
 
+        print("returned from trans_connection.execute")
         if not result:
-            trans.rollback()
+            print("no result in trans_connection.execute - rolling back")
+            trans_connection.rollback()
             trans_connection.close()
             return None
+
         if not(self.state.game_id):
             self.state.game_id = int(result)
 
@@ -322,7 +332,7 @@ class Game(object):
                                                 game_id=str(self.state.game_id),
                                                 database_connection=database_connection,
                                                 trans_connection=trans_connection):
-            trans.rollback()
+            trans_connection.rollback()
             trans_connection.close()
             raise ValueError('error persisting Game.PILE_DECK to database')
         if not self.__persist_cards_to_database(deck=self.cards.pile_burn,
@@ -330,7 +340,7 @@ class Game(object):
                                                 game_id=str(self.state.game_id),
                                                 database_connection=database_connection,
                                                 trans_connection=trans_connection):
-            trans.rollback()
+            trans_connection.rollback()
             trans_connection.close()
             raise ValueError('error persisting Game.PILE_BURN to database')
         if not self.__persist_cards_to_database(deck=self.cards.pile_played,
@@ -338,7 +348,7 @@ class Game(object):
                                                 game_id=self.state.game_id,
                                                 database_connection=database_connection,
                                                 trans_connection=trans_connection):
-            trans.rollback()
+            trans_connection.rollback()
             trans_connection.close()
             raise ValueError('error persisting Game.PILE_PLAYED to database')
         if not self.__persist_cards_to_database(deck=self.cards.pile_pick,
@@ -346,19 +356,18 @@ class Game(object):
                                                 game_id=str(self.state.game_id),
                                                 database_connection=database_connection,
                                                 trans_connection=trans_connection):
-            trans.rollback()
+            trans_connection.rollback()
             trans_connection.close()
             raise ValueError('error persisting Game.PILE_PICK to database')
 
         for player in self.players:
             print("saving player:", jsonpickle.dumps(player, unpicklable=True))
-            player.save(database_connection, self.state.game_id,
-                        trans_connection=trans_connection)
+            player.save(database_connection, self.state.game_id, trans_connection=trans_connection)
             # store a reference to this player's object on the game itself
             if player.ID == self.state.this_player_id:
                 self.this_player = player
 
-        trans.commit()
+        trans_connection.commit()
         trans_connection.close()
         # return the game_id for future use
         return self.state.game_id
@@ -729,7 +738,7 @@ class Game(object):
             face_cards = []
             for card in cards_to_swap:
                 index = int(card[2:])
-                print("index", index)
+                print("swapping for index", index)
                 try:
                     card_type = Card_Types.Get_Code[card[0]]
                 except (KeyError, IndexError):
@@ -748,6 +757,7 @@ class Game(object):
                             'action': 'swap', 'action_result': False, 'action_message': message}
                         return response
                     face_cards.append(index)
+
                 elif card_type == Card_Types.CARD_HAND:
                     # hand card
                     message = self.__check_card_index_not_over_deck_length(
@@ -779,7 +789,7 @@ class Game(object):
         else:
             response = {'action': 'swap', 'action_result': False,
                         'action_message': 'You can\'t swap cards right now'}
-
+        print("swap response", jsonpickle.dumps(response, unpicklable=False))
         return response
 
     def __load_cards_from_database(self, deck_type, game_id, database_connection):
