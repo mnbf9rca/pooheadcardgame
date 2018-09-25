@@ -4,6 +4,7 @@ from tempfile import mkdtemp
 import jsonpickle
 from flask import (Flask, flash, jsonify, make_response, redirect,
                    render_template, request, session, url_for)
+from flask_sslify import SSLify
 from flask_session import Session
 from werkzeug.exceptions import default_exceptions
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -17,10 +18,14 @@ from player import Player
 from sql import SQL
 from urllib.parse import quote_plus
 
+import requests
+
+
 # from game_helpers import get_users_for_game
 
 # Configure application
 app = Flask(__name__)
+sslify = SSLify(app)
 
 # Ensure templates are auto-reloaded
 app.config["TEMPLATES_AUTO_RELOAD"] = True
@@ -50,6 +55,26 @@ Session(app)
 # Environment variables are defined in app.yaml.
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['SQLALCHEMY_DATABASE_URI']
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+metadata_server = "http://metadata.google.internal/computeMetadata/v1/instance/"
+metadata_flavor = {'Metadata-Flavor' : 'Google'}
+
+try:
+    # let's try and fetch metadata from the google cloud internal metadata server
+    # if this fails, then we're running locally
+    gcp = requests.get(metadata_server, headers = metadata_flavor).text
+except:
+    pass
+    gcp = None
+
+if gcp:
+    # we're in google cloud
+    # fetch sql username and password from metadata
+    metadata_server = "http://metadata/computeMetadata/v1/project/attributes/"
+    password = requests.get(metadata_server + 'sqlpassword', headers = metadata_flavor).text
+    username = requests.get(metadata_server + 'sqlusername', headers = metadata_flavor).text
+    app.config['SQLALCHEMY_DATABASE_URI'] =app.config['SQLALCHEMY_DATABASE_URI'].replace('<creds>', username + ":" + password)
+
 db = SQL(app.config['SQLALCHEMY_DATABASE_URI'])
 
 
@@ -59,6 +84,7 @@ def index():
        return redirect("/logged_in")
     else:
         return render_template("index.html")
+
 
 
 @app.route("/logged_in")

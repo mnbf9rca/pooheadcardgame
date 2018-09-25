@@ -350,9 +350,11 @@ class Game(object):
 
         # load game config
         # fields not retrieved: `last_move_at`, `gameid`,`checksum`,`game_ready_to_start`
-        config = database_connection.execute('SELECT "game_finished", "players_requested", "players_finished", "play_on_anything_cards", "play_order", "less_than_card","transparent_card","burn_card","reset_card","number_of_decks","number_face_down_cards","number_hand_cards","current_turn_number","last_player", "players_ready_to_start", "deal_done" FROM games WHERE gameid = :game_id',
+        config = database_connection.execute("SELECT game_finished, players_requested, players_finished, play_on_anything_cards, play_order, less_than_card,transparent_card,burn_card,reset_card,number_of_decks,number_face_down_cards,number_hand_cards,current_turn_number,last_player, players_ready_to_start, deal_done FROM games WHERE gameid = :game_id",
                                              game_id=self.state.game_id)
+        print("config", jsonpickle.dumps(config, unpicklable=False))
         config = config[0]
+        print("config", jsonpickle.dumps(config, unpicklable=False))
         self.state.game_finished = config["game_finished"]
         self.state.number_of_players_requested = config["players_requested"]
         self.state.players_finished = json.loads(config["players_finished"])

@@ -16,7 +16,7 @@ env_variables:
     # Replace user, password, database, and instance connection name with the values obtained
     # when configuring your Cloud SQL instance.
     SQLALCHEMY_DATABASE_URI: >-
-      mysql+pymysql://USER:PASSWORD@/poohead?unix_socket=/cloudsql/pooheadcardgame:europe-west1:poohead-db
+      mysql+pymysql://<creds>@/poohead?unix_socket=/cloudsql/pooheadcardgame:europe-west1:poohead-db
 
 beta_settings:
     cloud_sql_instances: pooheadcardgame:europe-west1:poohead-db

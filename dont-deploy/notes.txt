@@ -1,0 +1,7 @@
+to preview:
+export FLASK_APP=application.py 
+export FLASK_ENV=development
+flask run --port=8080
+check URL in creds
+
+https://cloud.google.com/appengine/docs/flexible/python/quickstart
