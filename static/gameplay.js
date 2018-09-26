@@ -24,10 +24,8 @@ function enable_refresh_timer() {
 };
 
 function check_state_change() {
-    data = "get_checksum"
+    data = "get_checksum";
     $.postJSON("/checkstate", data, function (result) {
-
-        //console.log("checkstate", JSON.stringify(result))
         if (result["database_checksum"] != prior_database_checksum) {
             console.log("checksum changed");
             prior_database_checksum = result["database_checksum"];
@@ -37,8 +35,7 @@ function check_state_change() {
 };
 
 $(document).ready(function () {
-    update_game_state()
-
+    update_game_state();
     $('#ready-to-play-info').on('click', '#action_button', function () {
         submit_action(this.value);
     });
@@ -48,7 +45,6 @@ $(document).ready(function () {
 
 $.postJSON = function (url, data, success, dataType) {
     // modified from https://gist.github.com/padcom/1557142/7ebb6a9c632f02ecb10a57e18340c5eae86b251e
-
     if (typeof data != 'string') {
         data = JSON.stringify(data);
     }
@@ -60,7 +56,7 @@ $.postJSON = function (url, data, success, dataType) {
         contentType: "application/json",
         success: success,
         error: function (xhr, status, error) {
-            console.error("status", status, "error", error)
+            console.error("status", status, "error", error);
         }
     });
 };
@@ -193,7 +189,7 @@ function display_game_actions(allowed_moves, player_id) {
         switch (allowed_moves.allowed_action) {
             case "play": {
                 // allow the user to select only the type of card(s) they can play
-                if (allowed_moves.is_next_player) { add_action_button("Play") };
+                if (allowed_moves.is_next_player) { add_action_button("Play"); };
                 add_action_button("refresh", clear_existing = !(allowed_moves.is_next_player));
                 break;
             };
@@ -206,14 +202,14 @@ function display_game_actions(allowed_moves, player_id) {
                     // they're not in the allowed list
                     add_action_button("refresh");
                     enable_refresh_timer();
-                    display_alert("Waiting for other users to be ready. Try refreshing.")
+                    display_alert("Waiting for other users to be ready. Try refreshing.");
                 };
                 break;
             }
             case "wait": {
                 add_action_button("refresh");
                 enable_refresh_timer();
-                display_alert("wait for others to play.")
+                display_alert("wait for others to play.");
                 break;
             };
             case "pick": {
@@ -340,7 +336,7 @@ function lay_out_cards_div(cards, card_type, player_id, number_in_hand = false, 
             child_div = document.createElement("div");
             child_div.className = "flex-div";
             for (j = 0; j < cards.length; j++) {
-                card = cards[j]
+                card = cards[j];
                 suit = card.suit;
                 rank = card.rank;
                 let img = document.createElement("img");
@@ -355,12 +351,12 @@ function lay_out_cards_div(cards, card_type, player_id, number_in_hand = false, 
                 child_div.appendChild(this_card_div);
             };
             card_div.append(child_div);
-            if (number_in_hand) { card_div.appendChild(document.createTextNode("Number of cards: " + number_in_hand.toString())) };
+            if (number_in_hand) { card_div.appendChild(document.createTextNode("Number of cards: " + number_in_hand.toString())); };
         };
     } else {
         child_div = document.createElement("div");
         child_div.className = "card-group";
-        if (number_in_hand) { child_div.appendChild(document.createTextNode("Number of cards: " + number_in_hand.toString())) };
+        if (number_in_hand) { child_div.appendChild(document.createTextNode("Number of cards: " + number_in_hand.toString())); };
         card_div.append(child_div);
     };
     return card_div;;
