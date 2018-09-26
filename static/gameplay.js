@@ -279,7 +279,7 @@ function lay_out_cards(cards, card_type, card_player_id, this_player_id, allowed
                 // allow the user to select only the type of card(s) they can play
 
                 allowed_cards = allowed_moves.allowed_cards;
-                if ((allowed_cards ==  card_type) && allowed_moves.is_next_player){
+                if (allowed_cards ==  card_type && allowed_moves.is_next_player && card_player_id == this_player_id){
                     return_value = lay_out_cards_div(cards, card_type, card_player_id, number_in_hand, with_selector = true)
                 }
                 else {
