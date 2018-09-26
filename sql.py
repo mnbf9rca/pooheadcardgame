@@ -198,6 +198,7 @@ class SQL(object):
                 result = trans_connection.execute(statement)
                 print("completed transactional query")
             else:
+                print(f"Attempting to execute regular query: {statement}")
                 result = self.engine.execute(statement)
             
             # If SELECT (or INSERT with RETURNING), return result set as list of dict objects
@@ -214,12 +215,12 @@ class SQL(object):
 
             # If INSERT, return primary key value for a newly inserted row
             elif re.search(r"^\s*INSERT", statement, re.I):
-                if result.rowcount > 1:
+                if (trans_connection or result.rowcount > 1):
                     # more than one record affected; return true as cant return multiple primary keys
                     # also - be aware that this is only rows MATCHED, not the actual count
                     # (http://docs.sqlalchemy.org/en/latest/core/connections.html#sqlalchemy.engine.ResultProxy.rowcount)
                     # so it's a bit of a hack
-                    return True
+                    ret = True
                 elif self.engine.url.get_backend_name() in ["postgres", "postgresql"]:
                     result = self.engine.execute(sqlalchemy.text("SELECT LASTVAL()"))
                     ret = result.first()[0]

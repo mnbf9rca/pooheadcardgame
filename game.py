@@ -810,14 +810,15 @@ class Game(object):
                                              card_type=int(deck_type),
                                              game_id=int(game_id))
 
-        if len(deck) > 0:
-            cards = []
-            i = 0
-            for card in deck:
-                cards.append(
-                    f"({game_id}, {deck_type}, {card.suit}, {card.rank}, {i})")
+        cards = []
+        i = 0
+        for card in deck:
+            cards.append(
+                f"({game_id}, {deck_type}, {card.suit}, {card.rank}, {i})")
 
-                i += 1
+            i += 1
+        
+        if cards:
             cards = ", ".join(cards)
             result = database_connection.execute(
                 "INSERT INTO game_cards (game_id, card_location, card_suit, card_rank, card_sequence) VALUES " + cards + ";", trans_connection=trans_connection)
