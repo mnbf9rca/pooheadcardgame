@@ -187,6 +187,7 @@ function display_player_cards(current_player, this_player_id, allowed_moves) {
 
     this_player_div = document.createElement("div")
     this_player_div.className="col"
+    this_player_div.setAttribute('style','min-width:250px')
     this_player_div.setAttribute("id","player" + current_player.player_id.toString())
     header = document.createTextNode("Player " + current_player.player_id.toString())
     this_player_div.appendChild(header)
