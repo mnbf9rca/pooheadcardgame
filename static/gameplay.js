@@ -33,7 +33,7 @@ function check_state_change() {
             update_game_state();
         } else {
             // not changed; re-enable timer
-            enable_refresh_timer()
+            enable_refresh_timer();
         }
     });
 };
