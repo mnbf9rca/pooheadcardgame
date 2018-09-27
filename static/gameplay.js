@@ -17,19 +17,23 @@ function enable_refresh_timer() {
     timer = setInterval(
         function () {
             check_state_change();
-            //update_game_state()
         },
         500  /* 10000 ms = 10 sec */
     );
 };
 
 function check_state_change() {
+    // stop timer to avoid race
+    clearInterval(timer);
     data = "get_checksum";
     $.postJSON("/checkstate", data, function (result) {
         if (result["database_checksum"] != prior_database_checksum) {
             console.log("checksum changed");
             prior_database_checksum = result["database_checksum"];
             update_game_state();
+        } else {
+            // not changed; re-enable timer
+            enable_refresh_timer()
         }
     });
 };

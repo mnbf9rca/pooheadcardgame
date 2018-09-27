@@ -196,7 +196,7 @@ class SQL(object):
             if trans_connection:
                 print(f"Attempting to execute transactional query: {statement}")
                 result = trans_connection.execute(statement)
-                print("completed transactional query")
+                print(f"completed transactional query, result.lastrowid: {result.lastrowid}")
             else:
                 print(f"Attempting to execute regular query: {statement}")
                 result = self.engine.execute(statement)
@@ -215,17 +215,16 @@ class SQL(object):
 
             # If INSERT, return primary key value for a newly inserted row
             elif re.search(r"^\s*INSERT", statement, re.I):
-                if (trans_connection or result.rowcount > 1):
-                    # more than one record affected; return true as cant return multiple primary keys
-                    # also - be aware that this is only rows MATCHED, not the actual count
-                    # (http://docs.sqlalchemy.org/en/latest/core/connections.html#sqlalchemy.engine.ResultProxy.rowcount)
-                    # so it's a bit of a hack
-                    ret = True
-                elif self.engine.url.get_backend_name() in ["postgres", "postgresql"]:
+                if self.engine.url.get_backend_name() in ["postgres", "postgresql"]:
                     result = self.engine.execute(sqlalchemy.text("SELECT LASTVAL()"))
                     ret = result.first()[0]
                 else:
                     ret = result.lastrowid
+                if (ret == 0):
+                    # no row ID generated
+                    # but if there's an exception, that's overridden below
+                    # so let's just return True
+                    ret = True
 
             # If DELETE or UPDATE, return number of rows matched
             elif re.search(r"^\s*(?:DELETE|UPDATE)", statement, re.I):
