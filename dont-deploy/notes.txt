@@ -1,7 +1,12 @@
 to preview:
-export FLASK_APP=application.py 
-export FLASK_ENV=development
-flask run --port=8080
-check URL in creds
+in one window, 
+- export creds
+- run ./dont-deploy/run-gcloud-proxy.sh
+in another,
+- run ./dont-deploy/run_flaskl.sh 
+
+
 
 https://cloud.google.com/appengine/docs/flexible/python/quickstart
+
+testing localo

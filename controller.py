@@ -14,7 +14,8 @@ def do_load_game(game_id, this_player_id, database_connection):
     """loads a game object"""
     print(f"Starting to load game for ID '{game_id}'")
     game = Game()
-    game.this_player_id = this_player_id
+    game.state.game_id = game_id
+    game.state.this_player_id = this_player_id
     players = get_users_for_game(game_id, database_connection)
     print("players identified: " + str(players))
     game.players = []
@@ -53,7 +54,7 @@ def do_deal_if_game_ready(game, dabase_connection):
        the players list"""
     if (game and
         game.ready_to_start and
-            (game.this_player_id in (p.id for p in game.players))):
+            (game.state.this_player_id in (p.ID for p in game.players))):
         # game is ready to start, and this player is in the players list
         if not game.state.deal_done:
             game.deal()
@@ -76,7 +77,7 @@ def do_start_new_game(request_json, this_player_user_id, database_connection):
         response = {"startnewgame": True,
                     "new_game_id": game_id,
                     "message": message,
-                    "response": f"?msg={msg}"}
+                    "redirect_querystring": f"?msg={msg}"}
         return response, game
     else:
         response = {"startnewgame": False,
