@@ -123,7 +123,7 @@ def do_playcards(request_json, game, database_connection):
             response = {'action': action, 'action_result': False,
                         'action_message': "no cards specified"}
         else:
-            response = game.play_move(cards, game.this_player)
+            response = game.play_move(cards)
 
     elif action == "pick":
         # player has to pick up the cards
@@ -178,7 +178,7 @@ def get_game_state(game, database_connection):
                    'players_state': players_state,
                    "checksum": game.checksum()}
 
-    print("total_state:", total_state)
+    print("total_state:", jsonpickle.dumps(total_state, unpicklable=False))
     return total_state
 
 

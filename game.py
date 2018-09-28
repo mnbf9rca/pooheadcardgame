@@ -1,11 +1,12 @@
-from cards import Card, Deck, Card_Types
-
-from player import Player
 import json
-import jsonpickle
-from zlib import crc32
 from random import shuffle
+from zlib import crc32
+
+import jsonpickle
 from sqlalchemy.orm import sessionmaker
+
+from cards import Card, Card_Types, Deck
+from player import Player
 
 
 class Game(object):
@@ -62,9 +63,7 @@ class Game(object):
         "number_of_players": 2
     }
 
-    this_player = None
-
-    def __init__(self, this_player_id = None, number_of_players=0):
+    def __init__(self, this_player_id=None, number_of_players=0):
         self.state = self.State(number_of_players)
         self.cards = self.Cards()
         self.state.this_player_id = this_player_id
@@ -255,34 +254,27 @@ class Game(object):
         """creates a new deck of cards, deals to each player, then puts the remaining cards in the pick stack"""
         new_deck = Deck()
 
-        # although cards are shuffled and so it doesnt really matter
-        # follow convention and deal face down, then face up, then hand cards
+        # cards are shuffled and so it doesnt really matter that we dont
+        # follow convention and deal each player's
+        # face down, then face up, then hand cards
         for _ in range(self.state.number_face_down_cards):
             for player in self.players:
                 player.face_down.append(new_deck.deal())
-
-        # number face down cards = number face up cards
-        for _ in range(self.state.number_face_down_cards):
-            for player in self.players:
                 player.face_up.append(new_deck.deal())
-
-        # hand cards
-        for _ in range(self.state.number_hand_cards):
-            for player in self.players:
                 player.hand.append(new_deck.deal())
 
         self.cards.pile_deck = new_deck.cards
         self.__update_pile_sizes()
-        self.state.play_order = list(player.ID for player in self.players)
         self.state.deal_done = True
 
     def save(self, database_connection):
-        """saves the current state of the game. If this is a new game without an ID, it creates one, otherwise it updates the existing one"""
+        """saves the current state of the game, using a transaction to ensure
+           that we can roll back if not successful. If this is a new game
+           without an ID, it creates one, otherwise it updates the existing one"""
         print("beginning game save")
-        
+
         Session = sessionmaker(bind=database_connection.engine)
         trans_connection = Session()
-        # trans = trans_connection.begin()
 
         print("started transaction")
         if not self.state.game_id:
@@ -329,7 +321,8 @@ class Game(object):
 
         if not self.__persist_cards_to_database(deck=self.cards.pile_deck,
                                                 deck_type=str(Game.PILE_DECK),
-                                                game_id=str(self.state.game_id),
+                                                game_id=str(
+                                                    self.state.game_id),
                                                 database_connection=database_connection,
                                                 trans_connection=trans_connection):
             trans_connection.rollback()
@@ -337,7 +330,8 @@ class Game(object):
             raise ValueError('error persisting Game.PILE_DECK to database')
         if not self.__persist_cards_to_database(deck=self.cards.pile_burn,
                                                 deck_type=str(Game.PILE_BURN),
-                                                game_id=str(self.state.game_id),
+                                                game_id=str(
+                                                    self.state.game_id),
                                                 database_connection=database_connection,
                                                 trans_connection=trans_connection):
             trans_connection.rollback()
@@ -353,7 +347,8 @@ class Game(object):
             raise ValueError('error persisting Game.PILE_PLAYED to database')
         if not self.__persist_cards_to_database(deck=self.cards.pile_pick,
                                                 deck_type=str(Game.PILE_PICK),
-                                                game_id=str(self.state.game_id),
+                                                game_id=str(
+                                                    self.state.game_id),
                                                 database_connection=database_connection,
                                                 trans_connection=trans_connection):
             trans_connection.rollback()
@@ -362,7 +357,8 @@ class Game(object):
 
         for player in self.players:
             print("saving player:", jsonpickle.dumps(player, unpicklable=True))
-            player.save(database_connection, self.state.game_id, trans_connection=trans_connection)
+            player.save(database_connection, self.state.game_id,
+                        trans_connection=trans_connection)
             # store a reference to this player's object on the game itself
             if player.ID == self.state.this_player_id:
                 self.this_player = player
@@ -441,7 +437,18 @@ class Game(object):
         self.state.play_list = self.cards.pile_played
 
     def calculate_player_allowed_actions(self):
-        """calculates what action, if any, the current player is allowed to perform"""
+        """calculates what action, if any, the current player is allowed to perform
+
+            returns:
+            always:
+                "allowed_action": finished | lost | wait | swap | play,
+                "action-message": to display to the end user
+
+            depending on state:
+                "allowed_cards": Card_Types.Short_Name,
+                "allowed_players": a list of players allowed to play,
+                "is_next_player": boolean,
+        """
         response = {"allowed_action": "unknown", "allowed_players": "unknown"}
 
         if len(self.state.players_finished) == len(self.players):
@@ -458,13 +465,14 @@ class Game(object):
             allowed_players = (list(
                 set(player.ID for player in self.players) - set(self.state.players_finished)))
             response = {"allowed_action": "wait",
+                        "action-message": "You've finished - but others are still playing. Please wait.",
                         "allowed_players": allowed_players}
         elif len(self.state.players_ready_to_start) < len(self.players):
             # still some players waiting to swap
-            # https://www.geeksforgeeks.org/python-difference-two-lists/
             allowed_players = (list(set(
                 player.ID for player in self.players) - set(self.state.players_ready_to_start)))
             response = {"allowed_action": "swap",
+                        "action-message": "You can choose to swap cards.",
                         "allowed_players": allowed_players}
         else:
             # ok - so we've not finished the game
@@ -483,10 +491,13 @@ class Game(object):
                     # or if we have only face down cards left
                     # let us play
                     action = "play"
+                    action_message = "You can't play - you must pick up cards."
                 else:
                     action = "pick"
+                    action_message = "Please play your move"
                 response = {"allowed_action": action,
                             "allowed_cards": Card_Types.Short_Name[card_type],
+                            "action-message": action_message,
                             "allowed_players": allowed_players,
                             "is_next_player": is_next_player}
             else:
@@ -516,9 +527,26 @@ class Game(object):
         self.__update_pile_sizes()
         return
 
+    def work_out_who_plays_first(self):
+        """ looks at all the players 'hand' cards and finds the one with the lowest rank.
+            that player starts the game, the others proceed in numerical order from them.
+        """
+        lowest_player = None
+        lowest_rank = 999
+        for player in self.players:
+            this_player_lowest_rank = min([card.rank for card in player.hand])
+            if this_player_lowest_rank < lowest_rank:
+                lowest_player = player.ID
+                lowest_rank = this_player_lowest_rank
+
+        while not self.state.play_order[0] == lowest_player:
+            self.rotate_player()
+
     def play_no_swap(self):
         """plays the move 'dont swap, ready to start' at the beginning of the game"""
         self.state.players_ready_to_start.append(self.state.this_player_id)
+        if len(self.state.players_ready_to_start) == len(self.players):
+            self.work_out_who_plays_first()
         return {'action': 'no_swap', 'action_result': True}
 
     def play_pick_up(self):
@@ -545,7 +573,7 @@ class Game(object):
         self.rotate_player()
         return {'action': 'pick', 'action_result': True}
 
-    def play_move(self, cards_to_play, player):
+    def play_move(self, cards_to_play):
         """ plays a given move"""
         # check game state
         # 1. is "play" a valid move?
@@ -559,102 +587,146 @@ class Game(object):
         if (allowed_actions["allowed_action"] == "play" and
                 allowed_actions["is_next_player"] == True):
             if cards_to_play:
-                    # validate that these cards are in this user's hand
-                validated_card_indexes = []
-                card_type = ""
-                for card_description in cards_to_play:
-                    card_index = int(card_description[2:])
-                    print("card_index", card_index,
-                          "card_description", card_description)
-                    allowed_cards = Card_Types.Get_Code[allowed_actions["allowed_cards"]]
-                    try:
-                        card_type = Card_Types.Get_Code[card_description[0]]
-                    except (KeyError, IndexError):
-                        result = {'action': 'play', 'action_result': False,
-                                  'action_message': f'Unknown card type {card_description[0]}'}
-                        return result
-                    except:
-                        raise
+                allowed_actions = self.calculate_player_allowed_actions()
+                allowed_card_type = Card_Types.Card_Type_From_Code.get(
+                    allowed_actions["allowed_cards"])
+                # validate that these cards are in this user's hand and are all the same type (face down, up, hand)
+                response, validated_cards, card_type = self.__validate_cards_exist_in_type(
+                    cards_to_play, allowed_card_type)
 
-                    if (card_type == Card_Types.CARD_FACE_DOWN and
-                            len(cards_to_play) != 1):
-                        # can only play one face down card at a time
-                        result = {'action': 'play', 'action_result': False,
-                                  'action_message': f'You can only play one face down card at a time'}
-                        return result
-                    if card_type != allowed_cards:
-                        response = {'action': 'play', 'action_result': False,
-                                    'action_message': f'You can only play cards of type {Card_Types.Long_Name[allowed_cards]} but you sent card of type {Card_Types.Long_Name[card_type]}'}
-                        return response
-                    message = self.__check_card_index_not_over_deck_length(
-                        card_index, card_type, player)
-                    if message:
-                        response = {
-                            'action': 'play', 'action_result': False, 'action_message': message}
-                        return response
-                    validated_card_indexes.append(card_index)
-
-                card_dict = self.this_player.get_cards(card_type)
-                validated_cards = list(
-                    card_dict[card_location] for card_location in validated_card_indexes)
-
-                # check if all cards are the same rank:
-                if not self.__are_all_cards_same_rank(validated_cards):
+                if response:
+                    return response
+                elif not self.__are_all_cards_same_rank(validated_cards):
+                    # check if all cards are the same rank:
                     result = {'action': 'play', 'action_result': False,
                               'action_message': f'If playing more than one card, they must all be the same rank (value).'}
                     return result
 
                 can_play_cards = self.__can_play_cards(validated_cards)
-                print("can_play_cards", can_play_cards)
 
                 if can_play_cards:
-                    # great - play teh cards!
-                    self.cards.pile_played.extend(validated_cards)
-                    # remove these cards from teh player's hand/hidden/up cards and refill their hand if there are cards left in teh deck
-                    self.this_player.remove_cards_from_player_cards(
+                    response = self.play_validated_cards(
                         validated_cards, card_type)
-                    if card_type == Card_Types.CARD_HAND:
-                        while (len(player.hand) < self.state.number_hand_cards and
-                               len(self.cards.pile_deck) > 0):
-                            player.hand.append(self.cards.pile_deck.pop())
-
-                    # check if last move clears the deck
-                    if self.__clears_deck(self.cards.pile_played):
-                        self.cards.pile_burn.extend(self.cards.pile_played)
-                        self.cards.pile_played = []
-                    else:
-                        self.rotate_player()
-
-                    if not player.face_down:
-                        # have run out of cards
-                        self.state.players_finished.append(player.ID)
-                        if len(self.state.players_finished) == len(self.players):
-                            self.state.game_finished = True
-                        response = {'action': 'wait', 'action_result': True}
-                    else:
-                        response = {'action': 'play', 'action_result': True}
                 else:
                     if card_type == Card_Types.CARD_FACE_DOWN:
                         # tried to play a face down card but lost
                         # move this card to the player's hand
-                        player.add_cards_to_player_cards(
+                        self.this_player.add_cards_to_player_cards(
                             validated_cards, Card_Types.CARD_HAND)
                         # pick up the rest of the played cards
                         self.__pick_up_cards()
                         self.this_player.remove_cards_from_player_cards(
                             validated_cards, card_type)
-                        response = {'action': 'play', 'action_result': True,
-                                    'action_message': 'playing down cards not yet implemented'}
+                        response = {'action': 'play',
+                                    'action_result': True,
+                                    'action_message': 'You played a face down card but lost'}
                     else:
-                        response = {'action': 'play', 'action_result': False,
+                        response = {'action': 'play',
+                                    'action_result': False,
                                     'action_message': f'Cannot play that move on the current stack'}
-                    self.__update_pile_sizes()
+
                     # return response
                 # response = {'action':'play', 'action_result':True}
             else:
                 response = {'action': 'play', 'action_result': False,
                             'action_message': "Select one or more cards to play"}
+        self.__update_pile_sizes()
         return response
+
+    def play_validated_cards(self, validated_cards, card_type):
+        """plays a set of validated_cards of type card_type for the current player"""
+        # great - play teh cards!
+        response = {'action': 'play',
+                    'action_result': True}
+        self.cards.pile_played.extend(validated_cards)
+        # remove these cards from teh player's hand/hidden/up cards and refill their hand if there are cards left in teh deck
+        self.this_player.remove_cards_from_player_cards(
+            validated_cards, card_type)
+        if card_type == Card_Types.CARD_HAND:
+            # replenish the player's hand from the deck
+            # while there are still cards in the pile, and
+            # while they have fewer than number_hand_cards
+            # cards in their hand
+            while (len(self.this_player.hand) < self.state.number_hand_cards and
+                    len(self.cards.pile_deck) > 0):
+                self.this_player.hand.append(self.cards.pile_deck.pop())
+
+        if (not self.this_player.face_down) and (not self.this_player.face_up) and (not self.this_player.hand):
+            # has run out of cards. Game over (for them at least)!
+            self.state.players_finished.append(self.this_player.ID)
+            if (len(self.players) - len(self.state.players_finished)) < 2:
+                # all players in players_finished
+                self.state.game_finished = True
+                message = "game over!"
+            else:
+                message = "You've finished. Wait for others."
+            response = {'action': 'play',
+                        'action_result': True,
+                        "action_message": message}
+
+        # check if last move clears the deck
+        if self.__clears_deck(self.cards.pile_played):
+            self.cards.pile_burn.extend(self.cards.pile_played)
+            self.cards.pile_played = []
+        else:
+            self.rotate_player()
+
+        return response
+
+    def __validate_cards_exist_in_type(self, cards_to_play, allowed_card_type):
+        """validate that a set of card indexes exists within a set of cards
+           of a given type belonging to this player. Check also that the cards
+           are all of the same rank. If they are, return the validated list of
+           cards, otherwise return narative error"""
+
+        response = None
+
+        card_types = [card_description[0]
+                      for card_description in cards_to_play]
+        card_type = Card_Types.Card_Type_From_Code.get(card_types[0])
+
+        card_indexes = [int(card_description[2:])
+                        for card_description in cards_to_play]
+
+        if not card_type:
+            response = {'action': 'play',
+                        'action_result': False,
+                        'action_message': f"Unknown card type '{card_type}'."}
+
+        elif card_types.count(card_types[0]) != len(card_types):
+            print("card_types.count(card_types[0]) != len(card_types)", card_types.count(
+                card_types[0]) != len(card_types))
+            response = {'action': 'play',
+                        'action_result': False,
+                        'action_message': 'You can only play cards of the same type (hand, face up, face down) in a single move.'}
+
+        elif card_type != allowed_card_type:
+            response = {'action': 'play',
+                        'action_result': False,
+                        'action_message': 'You cannot play that card type at this time.'}
+
+        elif (card_type == Card_Types.CARD_FACE_DOWN and
+              len(card_types) != 1):
+                # can only play one face down card at a time
+            response = {'action': 'play', 'action_result': False,
+                        'action_message': f'You can only play one face down card at a time'}
+
+        elif self.__check_card_index_over_deck_length(
+                max(card_indexes), card_type):
+            response = {'action': 'play', 'action_result': False,
+                        'action_message': f'Attempted to play card which is above face card count in __validate_cards_exist_in_type.'}
+
+        if not response:
+            cards_being_played_from = self.this_player.get_cards(card_type)
+            # validated_cards contains a list of Card objects which have been demonstated
+            # to be the same rank and that actually exist in a given set of cards that a player has
+            # (e.g. face down, face up, or hand).
+            response = None
+            validated_cards = list(
+                cards_being_played_from[card_location] for card_location in card_indexes)
+        else:
+            validated_cards = None
+        return response, validated_cards, card_type
 
     def __clears_deck(self, played_pile):
         all_match = False
@@ -670,7 +742,7 @@ class Game(object):
                 all_match)
 
     def __are_all_cards_same_rank(self, cards):
-        """checks whether all the cards in a given set are al of the same value"""
+        """checks whether all the cards in a given set are all of the same value"""
         # now check they're all the same
         last_card = None
         for card in cards:
@@ -682,7 +754,7 @@ class Game(object):
 
     def __can_play_cards(self, cards_to_check):
         """checks whether the card/cards can be played e.g. does
-           the user have ANY cards in their hand which can be played
+           the user have ANY cards in the set cards_to_check which can be played
            on the current played stack, or can the cards in the user's play
            list be played on teh current played stack"""
         print("cards", jsonpickle.dumps(cards_to_check))
@@ -704,31 +776,26 @@ class Game(object):
                         return True
             return False
 
-    def __check_card_index_not_over_deck_length(self, card_index, card_type, player):
+    def __check_card_index_over_deck_length(self, card_index, card_type):
         """checks that the card at a given index actually exists in the given hand"""
-        if card_type == Card_Types.CARD_FACE_UP:
-            deck = player.face_up
-        elif card_type == Card_Types.CARD_FACE_DOWN:
-            deck = player.face_down
-        elif card_type == Card_Types.CARD_HAND:
-            deck = player.hand
-        else:
-            message = f'unknown card type {card_type}.'
-            return message
 
-        if (card_index > len(deck) - 1):
-            message = f'Attempted to play card {card_index} which is above face card count {len(deck) - 1}.'
-            return message
+        if card_type == Card_Types.CARD_FACE_UP:
+            deck = self.this_player.face_up
+        elif card_type == Card_Types.CARD_FACE_DOWN:
+            deck = self.this_player.face_down
+        elif card_type == Card_Types.CARD_HAND:
+            deck = self.this_player.hand
         else:
-            return None
+            raise ValueError(
+                f'unknown card type {card_type} in __check_card_index_over_deck_length.')
+
+        return card_index > (len(deck) - 1)
 
     def swap_cards(self, cards_to_swap, player):
         """swaps cards in hand with cards in face up"""
         # check game state - has this user already committed cards?
         # if not, then just swap the cards
         response = None
-        
-        
 
         allowed_actions = self.calculate_player_allowed_actions()
         if (allowed_actions["allowed_action"] == "swap" and
@@ -737,40 +804,32 @@ class Game(object):
             print("ready to swap")
             hand_cards = []
             face_cards = []
+
             for card in cards_to_swap:
-                index = int(card[2:])
-                print("swapping for index", index)
-                try:
-                    card_type = Card_Types.Get_Code[card[0]]
-                except (KeyError, IndexError):
-                    response = {'action': 'swap', 'action_result': False,
+                card_index = int(card[2:])
+                print("swapping for index", card_index)
+                card_type = Card_Types.Card_Type_From_Code.get(card[0])
+                if not card_type:
+                    response = {'action': 'swap',
+                                'action_result': False,
                                 'action_message': f"Unrecognised card type '{card[0]}'"}
                     return response
-                except:
-                    raise
+
+                if self.__check_card_index_over_deck_length(card_index, card_type):
+                    response = {
+                        'action': 'swap',
+                        'action_result': False,
+                        'action_message': f"Attempted to play card number {card_index} in set {Card_Types.Long_Name[card_type]} which is over set length"}
+                    return response
 
                 if card_type == Card_Types.CARD_FACE_UP:
-                    # face card
-                    message = self.__check_card_index_not_over_deck_length(
-                        index, card_type, player)
-                    if message:
-                        response = {
-                            'action': 'swap', 'action_result': False, 'action_message': message}
-                        return response
-                    face_cards.append(index)
+                    face_cards.append(card_index)
 
                 elif card_type == Card_Types.CARD_HAND:
-                    # hand card
-                    message = self.__check_card_index_not_over_deck_length(
-                        index, card_type, player)
-
-                    if message:
-                        response = {
-                            'action': 'swap', 'action_result': False, 'action_message': message}
-                        return response
-                    hand_cards.append(index)
+                    hand_cards.append(card_index)
                 else:
-                    response = {'action': 'swap', 'action_result': False,
+                    response = {'action': 'swap',
+                                'action_result': False,
                                 'action_message': 'You can only swap hand and face up cards.'}
                     return response
 
@@ -784,7 +843,6 @@ class Game(object):
                 for i in range(len(hand_cards)):
                     player.hand[hand_cards[i]], player.face_up[face_cards[i]
                                                                ] = player.face_up[face_cards[i]], player.hand[hand_cards[i]]
-
                 response = {'action': 'swap', 'action_result': True}
 
         else:
@@ -810,15 +868,12 @@ class Game(object):
                                              trans_connection=trans_connection,
                                              card_type=int(deck_type),
                                              game_id=int(game_id))
-
         cards = []
         i = 0
         for card in deck:
             cards.append(
                 f"({game_id}, {deck_type}, {card.suit}, {card.rank}, {i})")
-
             i += 1
-        
         if cards:
             cards = ", ".join(cards)
             result = database_connection.execute(
@@ -842,9 +897,7 @@ def get_users_for_game(game_id, database_connection):
 
 def get_list_of_games_looking_for_players(player_id, database_connection):
     """find all the games that this player is waiting to start"""
-
     sql = "SELECT games.gameid, player_counts.number_of_players, games.game_ready_to_start, games.game_finished, games.players_requested FROM games LEFT JOIN (SELECT player_game.game_id as game_id, count(player_game.player_id) as number_of_players FROM player_game group by player_game.game_id) as player_counts ON games.gameid = player_counts.game_id LEFT JOIN (select game_id from player_game where player_id = :player_id) AS games_to_exclude on games_to_exclude.game_id = games.gameid where games_to_exclude.game_id IS NULL"
-
     games = database_connection.execute(
         sql, player_id=player_id)
     return games
