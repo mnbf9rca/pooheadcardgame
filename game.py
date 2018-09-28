@@ -64,13 +64,13 @@ class Game(object):
 
     this_player = None
 
-    def __init__(self, this_player_id, number_of_players=0):
+    def __init__(self, this_player_id = None, number_of_players=0):
         self.state = self.State(number_of_players)
         self.cards = self.Cards()
         self.state.this_player_id = this_player_id
-        # players - we only know of 1 at creatin
         self.players = []
-        self.players.append(Player(this_player_id))
+        if this_player_id:
+            self.players.append(Player(this_player_id))
 
     def add_players_to_game(self, player_id, database_connection):
         """Checks if there's enough space left in this game, and
@@ -727,7 +727,8 @@ class Game(object):
         # check game state - has this user already committed cards?
         # if not, then just swap the cards
         response = None
-        # if not player.ID in self.state.players_ready_to_start:
+        
+        
 
         allowed_actions = self.calculate_player_allowed_actions()
         if (allowed_actions["allowed_action"] == "swap" and
