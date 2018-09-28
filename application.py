@@ -248,7 +248,7 @@ def getgamestate():
     if game:
         # always reload in case other users have caused a state change
         game.load(db)
-        game_state = {'active-game':True,
+        game_state = {'active-game':True, 
                         "state": game.state}
         # calculate the allowed moves at this stage of teh game for this player
         allowed_moves  = game.calculate_player_allowed_actions()
