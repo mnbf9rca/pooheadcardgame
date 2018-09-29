@@ -12,11 +12,17 @@ resources:
   memory_gb: 0.5
   disk_size_gb: 10
 
+
+# https://cloud.google.com/memorystore/docs/redis/connect-redis-instance-flex
+network:
+  name: default
+
 env_variables:
-    # Replace user, password, database, and instance connection name with the values obtained
-    # when configuring your Cloud SQL instance.
+    REDIS_HOST: 10.0.0.4
+    REDIS_PORT: 6379
     SQLALCHEMY_DATABASE_URI: >-
       mysql+pymysql://<creds>@/poohead?unix_socket=/cloudsql/pooheadcardgame:europe-west1:poohead-db
+    
 
 beta_settings:
     cloud_sql_instances: pooheadcardgame:europe-west1:poohead-db

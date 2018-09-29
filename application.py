@@ -4,6 +4,7 @@ from tempfile import mkdtemp
 from urllib.parse import quote_plus
 
 import jsonpickle
+import redis
 import requests
 from flask import (Flask, flash, jsonify, make_response, redirect,
                    render_template, request, session, url_for)
@@ -27,8 +28,47 @@ from sql import SQL
 
 # Configure application
 app = Flask(__name__)
-sslify = SSLify(app)
 sslify = SSLify(app, permanent=True)
+
+# idea from https://cloud.google.com/appengine/docs/flexible/python/using-cloud-sql
+# Environment variables are defined in app.yaml.
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['SQLALCHEMY_DATABASE_URI']
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+in_gcp, username, password, redis_host, redis_port, redis_secret = controller.get_sql_username_password()
+if username and password:
+    app.config['SQLALCHEMY_DATABASE_URI'] =app.config['SQLALCHEMY_DATABASE_URI'].replace('<creds>', username + ":" + password)
+else:
+    raise ValueError("Cannot load database connection details - username, password missing")
+
+# get DB connection
+my_db = controller.get_database_connection(app.config['SQLALCHEMY_DATABASE_URI'])
+
+app.config["SESSION_PERMANENT"] = False
+# app.config["SESSION_TYPE"] = "filesystem"
+
+
+if in_gcp:
+    # https://stackoverflow.com/questions/44769152/difficulty-implementing-server-side-session-storage-using-redis-and-flask
+    app.config['SECRET_KEY'] = redis_secret
+    app.config['SESSION_TYPE'] = 'redis'
+    app.config['SESSION_REDIS'] = redis.from_url(redis_host + ':' + redis_port)
+    # app.config.from_object(__name__)
+    print("loaded config for redis ok")
+else:
+    # Configure session to use filesystem (instead of signed cookies)
+    app.config["SESSION_FILE_DIR"] = mkdtemp()
+    app.config['SESSION_TYPE'] = 'filesystem'
+
+# initiate session
+
+if in_gcp:
+    sess = Session()
+    sess.init_app(app)
+    print("initiated session")
+else:
+    Session(app)
+
 
 # Ensure templates are auto-reloaded
 app.config["TEMPLATES_AUTO_RELOAD"] = True
@@ -44,25 +84,6 @@ def after_request(response):
     return response
 
 
-# Configure session to use filesystem (instead of signed cookies)
-app.config["SESSION_FILE_DIR"] = mkdtemp()
-app.config["SESSION_PERMANENT"] = False
-app.config["SESSION_TYPE"] = "filesystem"
-Session(app)
-
-# idea from https://cloud.google.com/appengine/docs/flexible/python/using-cloud-sql
-# Environment variables are defined in app.yaml.
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['SQLALCHEMY_DATABASE_URI']
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-username, password = controller.get_sql_username_password()
-if username and password:
-    app.config['SQLALCHEMY_DATABASE_URI'] =app.config['SQLALCHEMY_DATABASE_URI'].replace('<creds>', username + ":" + password)
-else:
-    raise ValueError("Cannot load database connection details - username, password missing")
-
-# get DB connection
-db = controller.get_database_connection(app.config['SQLALCHEMY_DATABASE_URI'])
 
 
 @app.route("/")
@@ -78,6 +99,7 @@ def index():
 @login_required
 def logged_in():
     # user is logged in, check for an active game
+    print("logged_in")
     message = ""
     try:
          message = request.args["msg"]
@@ -86,8 +108,8 @@ def logged_in():
     except:
         raise
 
-    games = get_list_of_games_for_this_user(session["user_id"], db)
-    new_games = get_list_of_games_looking_for_players(session["user_id"], db)
+    games = get_list_of_games_for_this_user(session["user_id"], my_db)
+    new_games = get_list_of_games_looking_for_players(session["user_id"], my_db)
     return render_template("logged_in.html", games=games, new_games=new_games, message = message)
 
 @app.route("/load_game")
@@ -98,7 +120,7 @@ def load_game():
         return apology("must provide game id", 500)
     
     game_id = int(game_id)
-    game = controller.do_load_game(game_id, session["user_id"], db)
+    game = controller.do_load_game(game_id, session["user_id"], my_db)
     if not game:
         # TODO make this better...
         return "error"
@@ -110,7 +132,7 @@ def load_game():
     if add:
         # would like to be added to this game
         # check the users playing this game
-        response = controller.do_add_to_game(game, db)
+        response = controller.do_add_to_game(game, my_db)
         message = response["message"]
 
     if game.ready_to_start:
@@ -131,7 +153,7 @@ def play_cards():
             response = {'action':'unknown', 'action_result':False, 'action_message': "submit your request via POST using JSON"}
         else:
             request_json = request.get_json(cache=False)
-            response = controller.do_playcards(request_json, session["game"], db)
+            response = controller.do_playcards(request_json, session["game"], my_db)
             return jsonpickle.encode(response, unpicklable=False)
     else:
         response = {'action':"any", 'action_result':False, 'action_message':"no active game"}
@@ -144,7 +166,7 @@ def checkstate():
         and the latest held in game state in session """
     game = session["game"]
     response = {"action":"haschanged",
-                "database_checksum": game.get_database_checksum(db)}
+                "database_checksum": game.get_database_checksum(my_db)}
     return json.dumps(response)
 
 
@@ -154,7 +176,7 @@ def getgamestate():
     """returns a JSON object to caller with a summary of the current
        state of the game, excluding sensitive information such as
        hidden cards, cards in other players' hands, or the deck"""
-    state = controller.get_game_state(session["game"], db)
+    state = controller.get_game_state(session["game"], my_db)
     resp = make_response(jsonpickle.encode(state, unpicklable=False), 200)
     resp.headers['Content-Type']= 'application/json'
     return resp
@@ -184,7 +206,7 @@ def startnewgame():
         # and validate the other new game properties
         if request.is_json:
             request_json = request.get_json(cache=False)
-            response, game = controller.do_start_new_game(request_json, session["user_id"],db)
+            response, game = controller.do_start_new_game(request_json, session["user_id"],my_db)
             if game:
                 session["game_id"] = game.state.game_id
                 session["game"] = game
@@ -213,7 +235,7 @@ def play():
     else:
         # take game from session
         game = session["game"]
-        game.load(db)
+        game.load(my_db)
         return render_template("play.html")
 
 @app.route("/login", methods=["GET", "POST"])
@@ -234,7 +256,7 @@ def login():
             return apology("must provide password", 403)
 
         # Query database for username
-        rows = db.execute("SELECT player_id, hash, is_admin FROM users WHERE username = :username",
+        rows = my_db.execute("SELECT player_id, hash, is_admin FROM users WHERE username = :username",
                           username=request.form.get("username").lower())
 
         # Ensure username exists and password is correct
@@ -244,6 +266,7 @@ def login():
         # Remember which user has logged in
         session["user_id"] = rows[0]["player_id"]
         session["is_admin"] = rows[0]["is_admin"]
+        
         session["game_id"] = None
         session["game"] = None
 
@@ -260,7 +283,7 @@ def logout():
     """Log user out"""
     game = session.get("game")
     if game:
-        controller.do_save_game(game, db)
+        controller.do_save_game(game, my_db)
     # Forget any user_id
     session.clear()
 
@@ -288,13 +311,13 @@ def register():
             return apology("passwords must match", 400)
 
         # Query database for username
-        rows = db.execute("SELECT player_id, hash FROM users WHERE username = :username",
+        rows = my_db.execute("SELECT player_id, hash FROM users WHERE username = :username",
                           username=request.form.get("username"))
 
         if len(rows) != 0:
             return apology("username already taken, sorry")
 
-        result = db.execute("INSERT INTO users (username, hash) VALUES (:username, :password_hash)",
+        result = my_db.execute("INSERT INTO users (username, hash) VALUES (:username, :password_hash)",
                           username=request.form.get("username").lower(), password_hash=generate_password_hash(request.form.get("password")))
         if not result:
             return apology("could not register")
