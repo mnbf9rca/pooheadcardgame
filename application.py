@@ -51,13 +51,7 @@ app.config["SESSION_FILE_DIR"] = mkdtemp()
 app.config['SESSION_TYPE'] = 'filesystem'
 
 # initiate session
-
-if in_gcp:
-    sess = Session()
-    sess.init_app(app)
-    print("initiated session")
-else:
-    Session(app)
+Session(app)
 
 
 # Ensure templates are auto-reloaded
