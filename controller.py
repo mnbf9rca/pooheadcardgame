@@ -9,6 +9,9 @@ import requests
 from sql import SQL
 from urllib.parse import quote_plus
 
+def do_save_game(game, database_connection):
+    game.save(database_connection)
+    return True
 
 def do_load_game(game_id, this_player_id, database_connection):
     """loads a game object"""
@@ -33,12 +36,17 @@ def do_load_game(game_id, this_player_id, database_connection):
 
 def do_add_to_game(game, database_connection):
     """attempts to add user to game"""
+    if not game:
+        raise ValueError("Tried to do_add_to_game without game")
     # looking to add themselves to this game
     # check whether this is allowed.
     if not game.add_players_to_game(game.this_player_id, database_connection):
         message = "could not add you to the game"
         action_result = False
 
+    elif __do_deal_if_game_ready(game, database_connection):
+        action_result = True
+        message = "Added you to the game, and it's ready to play."
     else:
         action_result = True
         message = "Added you to the game. Now sit tight and wait for enough other players to join."
@@ -49,11 +57,12 @@ def do_add_to_game(game, database_connection):
     return response
 
 
-def do_deal_if_game_ready(game, dabase_connection):
+def __do_deal_if_game_ready(game, dabase_connection):
     """checks if the game is ready to start and if this player is in
        the players list"""
-    if (game and
-        game.ready_to_start and
+    if not game:
+        raise ValueError("Tried to __do_deal_if_game_ready without game")
+    if (game.ready_to_start and
             (game.state.this_player_id in (p.ID for p in game.players))):
         # game is ready to start, and this player is in the players list
         if not game.state.deal_done:
@@ -109,7 +118,6 @@ def do_playcards(request_json, game, database_connection):
         else:
             # we have a action_cards object - submit to game
             response = game.swap_cards(cards, game.this_player)
-            print("returned from game.swap_cards")
 
     elif action == "no_swap":
         # player has opted to play without swapping

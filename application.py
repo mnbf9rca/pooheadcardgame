@@ -112,9 +112,8 @@ def load_game():
         # check the users playing this game
         response = controller.do_add_to_game(game, db)
         message = response["message"]
-    # before redirecting them back to the home page,
-    # check if game ready to start and we're in the game...
-    if controller.do_deal_if_game_ready(game, db):
+
+    if game.ready_to_start:
         return redirect(url_for("play"))
     else:
         return redirect(url_for("logged_in") + f"?msg={quote_plus(message)}")
@@ -214,15 +213,7 @@ def play():
         # take game from session
         game = session["game"]
         game.load(db)
-
-    for player in game.players:
-        userid = session["user_id"]
-        print(f'player {player.ID} session {userid}')
-        if player.ID == session["user_id"]:
-            session["player"] = player
-            break
-
-    return render_template("play.html")
+        return render_template("play.html")
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -266,10 +257,9 @@ def login():
 @app.route("/logout")
 def logout():
     """Log user out"""
-    if "game" in session:
-        if session["game"]:
-            game = session["game"]
-            game.save(db)
+    game = session.get("game")
+    if game:
+        controller.do_save_game(game, db)
     # Forget any user_id
     session.clear()
 
