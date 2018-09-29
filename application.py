@@ -1,25 +1,27 @@
 import json
 import os
 from tempfile import mkdtemp
+from urllib.parse import quote_plus
+
 import jsonpickle
+import requests
 from flask import (Flask, flash, jsonify, make_response, redirect,
                    render_template, request, session, url_for)
-from flask_sslify import SSLify
 from flask_session import Session
+from flask_sslify import SSLify
 from werkzeug.exceptions import default_exceptions
 from werkzeug.security import check_password_hash, generate_password_hash
+
+import controller
+from application_helpers import admin_user_required
 from cards import Card, Deck
-from game import Game, get_users_for_game, get_list_of_games_for_this_user, get_list_of_games_looking_for_players
+from game import (Game, get_list_of_games_for_this_user,
+                  get_list_of_games_looking_for_players, get_users_for_game)
 # from https://github.com/cs50/python-cs50
 from helpers import apology, login_required, lookup
-from application_helpers import admin_user_required
 from player import Player
 # from https://github.com/cs50/python-cs50
 from sql import SQL
-from urllib.parse import quote_plus
-
-import requests
-
 
 # from game_helpers import get_users_for_game
 
@@ -48,35 +50,19 @@ app.config["SESSION_PERMANENT"] = False
 app.config["SESSION_TYPE"] = "filesystem"
 Session(app)
 
-# Configure Library to use SQLite database
-
-#db = SQL("sqlite:///app.db")
-
-# from https://cloud.google.com/appengine/docs/flexible/python/using-cloud-sql
+# idea from https://cloud.google.com/appengine/docs/flexible/python/using-cloud-sql
 # Environment variables are defined in app.yaml.
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['SQLALCHEMY_DATABASE_URI']
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-metadata_server = "http://metadata.google.internal/computeMetadata/v1/instance/"
-metadata_flavor = {'Metadata-Flavor' : 'Google'}
-
-try:
-    # let's try and fetch metadata from the google cloud internal metadata server
-    # if this fails, then we're running locally
-    gcp = requests.get(metadata_server, headers = metadata_flavor).text
-except:
-    pass
-    gcp = None
-
-if gcp:
-    # we're in google cloud
-    # fetch sql username and password from metadata
-    metadata_server = "http://metadata/computeMetadata/v1/project/attributes/"
-    password = requests.get(metadata_server + 'sqlpassword', headers = metadata_flavor).text
-    username = requests.get(metadata_server + 'sqlusername', headers = metadata_flavor).text
+username, password = controller.get_sql_username_password()
+if username and password:
     app.config['SQLALCHEMY_DATABASE_URI'] =app.config['SQLALCHEMY_DATABASE_URI'].replace('<creds>', username + ":" + password)
+else:
+    raise ValueError("Cannot load database connection details - username, password missing")
 
-db = SQL(app.config['SQLALCHEMY_DATABASE_URI'])
+# get DB connection
+db = controller.get_database_connection(app.config['SQLALCHEMY_DATABASE_URI'])
 
 
 @app.route("/")
@@ -107,52 +93,32 @@ def logged_in():
 @app.route("/load_game")
 @login_required
 def load_game():
-    if not request.args["game_id"]:
+    game_id = request.args.get("game_id")
+    if not game_id:
         return apology("must provide game id", 500)
+    
+    game_id = int(game_id)
+    game = controller.do_load_game(game_id, session["user_id"], db)
+    if not game:
+        # TODO make this better...
+        return "error"
+    session["game"] = game # even if None
+    if game:
+        session["game_id"] = game.state.game_id
 
-    game_id = int(request.args["game_id"])
-
-    # check the users playing this game
-
-    game = Game(session["user_id"])
-    session["game"] = game
-
-    game.state.game_id = game_id
-    session["game_id"] = game.state.game_id
-
-
-    message = "Loaded the game, but it's not ready to start yet. Wait for other players."
-    players = get_users_for_game(game_id, db)
-    print("players loaded: " + str(players))
-    game.players = []
-    for player in players:
-        game.players.append(Player(player))
-    game.load(db)
-    add = None
-    try:
-        add = request.args["add"]
-    except (KeyError, IndexError):
-        pass
-    except:
-        raise
-
+    add = request.args.get("add")
     if add:
-        # looking to add themselves to this game
-        # check whether this is allowed.
-        if not game.add_players_to_game(session["user_id"], db):
-            message = quote_plus("could not add you to the game")
-            return redirect(url_for("logged_in") + f"?msg={message}")
-        else:
-            message = "Added you to the game. Now sit tight and wait for enough other players to join."
+        # would like to be added to this game
+        # check the users playing this game
+        response = controller.do_add_to_game(game, db)
+        message = response["message"]
 
     if game.ready_to_start:
-        if not game.state.deal_done:
-            game.deal()
-            game.save(db)
-        return redirect("/play")
+        return redirect(url_for("play"))
     else:
-        msg = quote_plus(message)
-        return redirect(url_for("logged_in") + f"?msg={msg}")
+        return redirect(url_for("logged_in") + f"?msg={quote_plus(message)}")
+
+
 
 @app.route("/playcards", methods=["POST"])
 @login_required
@@ -164,60 +130,8 @@ def play_cards():
             response = {'action':'unknown', 'action_result':False, 'action_message': "submit your request via POST using JSON"}
         else:
             request_json = request.get_json(cache=False)
-            # first, let's get the action and respond with a failure if we can't.
-            try:
-                action = request_json["action"]
-            except (KeyError, IndexError):
-                response = {'action':'unknown', 'action_result':False, 'action_message':"no action specified"}
-                return json.dumps(response)
-            except:
-                raise
-            # now set this as default action in case it fails to match any action below
-            response = {'action':action, 'action_result':False, 'action_message':"unknown action :" + action}
-
-            # at least we've got a candidate action - let's reload the game state from teh database
-            game = session["game"]
-            player = session["player"]
-            game.load(db)
-
-            if action == "swap":
-                try:
-                    cards = request_json["action_cards"]
-                except (KeyError, IndexError):
-                    response = {'action':action, 'action_result':False, 'action_message':"no cards specified"}
-                    return json.dumps(response)
-                except:
-                    raise
-
-                # we have a action_cards object - submit to game
-                response = game.swap_cards(cards, player)
-                print("returned from game.swap_cards")
-
-            elif action == "no_swap":
-                # player has opted to play without swapping
-                print("starting game without swap")
-                response = game.play_no_swap()
-            elif action == "play":
-                # play these cards
-                print("starting play")
-                try:
-                    cards = request_json["action_cards"]
-                except (KeyError, IndexError):
-                    response = {'action':action, 'action_result':False, 'action_message':"no cards specified"}
-                    return json.dumps(response)
-
-                response = game.play_move(cards, player)
-
-            elif action == "pick":
-                # player has to pick up the cards
-                response = game.play_pick_up()
-            
-            if response["action_result"]:
-                # if any of the items above report success, save state
-                print("about to save game from /playcards")
-                game.save(db)
-                print("saved game")
-        
+            response = controller.do_playcards(request_json, session["game"], db)
+            return jsonpickle.encode(response, unpicklable=False)
     else:
         response = {'action':"any", 'action_result':False, 'action_message':"no active game"}
     return json.dumps(response)
@@ -239,35 +153,8 @@ def getgamestate():
     """returns a JSON object to caller with a summary of the current
        state of the game, excluding sensitive information such as
        hidden cards, cards in other players' hands, or the deck"""
-    game = session["game"]
-    # set default response to indicate no active game
-    game_state= {"active-game":False}
-    players_state = []
-    allowed_moves = []
-    # if we have an active game, use that
-    if game:
-        # always reload in case other users have caused a state change
-        game.load(db)
-        game_state = {'active-game':True, 
-                        "state": game.state}
-        # calculate the allowed moves at this stage of teh game for this player
-        allowed_moves  = game.calculate_player_allowed_actions()
-        if allowed_moves["allowed_action"] == "lost":
-            # this will only just have been computed. Save.
-            game.state.players_finished.append(session["user_id"])
-            game.save(db)
-        # Construct an object which represents the parts of the game that we want to expose to users
-        for player in game.players:
-            players_state.append( player.summarise(session["user_id"]) )
-    print(jsonpickle.encode(players_state, unpicklable=False))
-    # construct response
-    total_state = { 'game': game_state,
-                    'allowed_moves' : allowed_moves,
-                    'players_state': players_state,
-                    "checksum":game.checksum()}
-    print("total_state_", total_state)
-
-    resp = make_response(jsonpickle.encode(total_state, unpicklable=False), 200)
+    state = controller.get_game_state(session["game"], db)
+    resp = make_response(jsonpickle.encode(state, unpicklable=False), 200)
     resp.headers['Content-Type']= 'application/json'
     return resp
 
@@ -296,27 +183,14 @@ def startnewgame():
         # and validate the other new game properties
         if request.is_json:
             request_json = request.get_json(cache=False)
-            # start to parse it
-            game=Game(session["user_id"])
-            print("initiated a game")
-            parsed_values, message = game.parse_requested_config(request_json)
-            if parsed_values:
-                game_id = game.save(db)
+            response, game = controller.do_start_new_game(request_json, session["user_id"],db)
+            if game:
                 session["game_id"] = game.state.game_id
                 session["game"] = game
-                msg = quote_plus(f"Game created successfully with ID {game.state.game_id}. Now let's wait for some other players to join.")
-                print("msg",msg)
-                response = {"startnewgame":True,
-                            "new_game_id": game_id,
-                            "message": message,
-                            "redirect": url_for("logged_in") + f"?msg={msg}"}
-                return jsonpickle.dumps(response, unpicklable=False)
-            else:
-                response = {"startnewgame": False,
-                            "message": message}
-                resp = make_response(jsonpickle.encode(response, unpicklable=False), 200)
-                resp.headers['Content-Type']= 'application/json'
-                return resp
+                response["redirect"] = url_for("logged_in") + response["redirect_querystring"] 
+            resp = make_response(jsonpickle.encode(response, unpicklable=False), 200)
+            resp.headers['Content-Type'] = 'application/json'
+            return resp
         else:
             response = {"startnewgame": False,
                         "message": "you must submit your message as a JSON encoded object"}
@@ -339,15 +213,7 @@ def play():
         # take game from session
         game = session["game"]
         game.load(db)
-
-    for player in game.players:
-        userid = session["user_id"]
-        print(f'player {player.ID} session {userid}')
-        if player.ID == session["user_id"]:
-            session["player"] = player
-            break
-
-    return render_template("play.html")
+        return render_template("play.html")
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -391,10 +257,9 @@ def login():
 @app.route("/logout")
 def logout():
     """Log user out"""
-    if "game" in session:
-        if session["game"]:
-            game = session["game"]
-            game.save(db)
+    game = session.get("game")
+    if game:
+        controller.do_save_game(game, db)
     # Forget any user_id
     session.clear()
 
