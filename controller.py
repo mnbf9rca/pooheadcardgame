@@ -196,7 +196,7 @@ def get_sql_username_password():
        environment variables.
        """
 
-    username, password, redis_host, redis_port, redis_secret = None, None, None, None, None
+    username, password = None, None
     metadata_server = "http://metadata.google.internal/computeMetadata/v1/instance/"
     metadata_flavor = {'Metadata-Flavor': 'Google'}
 
@@ -218,10 +218,6 @@ def get_sql_username_password():
                 metadata_server + 'sqlpassword', headers=metadata_flavor).text
             username = requests.get(
                 metadata_server + 'sqlusername', headers=metadata_flavor).text
-            redis_host = os.environ['REDIS_HOST']
-            redis_port = os.environ['REDIS_PORT']
-            redis_secret = requests.get(
-                metadata_server + 'redis_secret', headers=metadata_flavor).text
         except:
             pass
     else:
@@ -229,12 +225,12 @@ def get_sql_username_password():
         # find credentials from environment variable
         in_gcp = False
         try:
-            password = os.environ['SQLALCHEMY_DATABASE_PASSWORD']
-            username = os.environ['SQLALCHEMY_DATABASE_USERNAME']
+            password = os.environ.get('SQLALCHEMY_DATABASE_PASSWORD')
+            username = os.environ.get('SQLALCHEMY_DATABASE_USERNAME')
         except:
             pass
 
-    return in_gcp, username, password, redis_host, redis_port, redis_secret
+    return in_gcp, username, password
 
 
 def get_database_connection(connection_string):

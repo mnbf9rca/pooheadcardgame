@@ -35,7 +35,7 @@ sslify = SSLify(app, permanent=True)
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['SQLALCHEMY_DATABASE_URI']
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-in_gcp, username, password, redis_host, redis_port, redis_secret = controller.get_sql_username_password()
+in_gcp, username, password = controller.get_sql_username_password()
 if username and password:
     app.config['SQLALCHEMY_DATABASE_URI'] =app.config['SQLALCHEMY_DATABASE_URI'].replace('<creds>', username + ":" + password)
 else:
@@ -45,20 +45,10 @@ else:
 my_db = controller.get_database_connection(app.config['SQLALCHEMY_DATABASE_URI'])
 
 app.config["SESSION_PERMANENT"] = False
-# app.config["SESSION_TYPE"] = "filesystem"
 
-
-if in_gcp:
-    # https://stackoverflow.com/questions/44769152/difficulty-implementing-server-side-session-storage-using-redis-and-flask
-    app.config['SECRET_KEY'] = redis_secret
-    app.config['SESSION_TYPE'] = 'redis'
-    app.config['SESSION_REDIS'] = redis.from_url(redis_host + ':' + redis_port)
-    # app.config.from_object(__name__)
-    print("loaded config for redis ok")
-else:
-    # Configure session to use filesystem (instead of signed cookies)
-    app.config["SESSION_FILE_DIR"] = mkdtemp()
-    app.config['SESSION_TYPE'] = 'filesystem'
+# Configure session to use filesystem (instead of signed cookies)
+app.config["SESSION_FILE_DIR"] = mkdtemp()
+app.config['SESSION_TYPE'] = 'filesystem'
 
 # initiate session
 
