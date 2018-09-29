@@ -40,7 +40,7 @@ def do_add_to_game(game, database_connection):
         raise ValueError("Tried to do_add_to_game without game")
     # looking to add themselves to this game
     # check whether this is allowed.
-    if not game.add_players_to_game(game.this_player_id, database_connection):
+    if not game.add_players_to_game(game.state.this_player_id, database_connection):
         message = "could not add you to the game"
         action_result = False
 

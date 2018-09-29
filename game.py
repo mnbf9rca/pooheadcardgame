@@ -1,6 +1,7 @@
 import json
 from random import shuffle
 from zlib import crc32
+from typing import List
 
 import jsonpickle
 from sqlalchemy.orm import sessionmaker
@@ -83,6 +84,7 @@ class Game(object):
 
             self.players.append(player_to_add)
             self.state.number_of_players_joined = len(self.players)
+            self.state.play_order = [player.ID for player in self.players]
             self.save(database_connection)
 
             return True
@@ -214,6 +216,7 @@ class Game(object):
             self.players_finished = []
             self.play_on_anything_cards = [2, 10]
             self.deal_done = False
+            self.all_special_cards = []
 
             # game state
             self.current_turn_number = 0
@@ -223,6 +226,19 @@ class Game(object):
             self.pile_pick_size = 0
             self.pile_played_size = 0
             self.pile_deck_size = 0
+
+        def get_all_special_cards(self):
+            """returns all special cards"""
+            cards = []
+            cards.append(self.transparent_card)
+            cards.append(self.less_than_card)
+            cards.append(self.burn_card)
+            cards.append(self.reset_card)
+
+            while 0 in cards:
+                cards.remove(0)
+
+            return set(cards)
 
     class Cards(object):
         """stores cards separately from state to keep secret from client"""
@@ -450,38 +466,44 @@ class Game(object):
                 "is_next_player": boolean,
         """
         response = {"allowed_action": "unknown", "allowed_players": "unknown"}
-
-        if len(self.state.players_finished) == len(self.players):
+        all_player_id = set([player.ID for player in self.players])
+        players_still_to_swap = (list(all_player_id - set(self.state.players_ready_to_start)))
+        players_still_not_finished = (list(all_player_id - set(self.state.players_finished)))
+        print("set(self.state.players_ready_to_start)", set(self.state.players_ready_to_start),"set(self.state.players_finished)",set(self.state.players_finished), "all_player_id", all_player_id, "players_still_to_swap", players_still_to_swap, "players_still_not_finished", players_still_not_finished)
+        if len(players_still_to_swap) > 0:
+            # still some players not yet ready to start --> must be swapping
+            if self.state.this_player_id in players_still_to_swap:
+                action = "swap"
+                message = "You can choose to swap cards,"
+            else:
+                action = "wait"
+                message = "You've swapped - but others are still swapping. Wait for them..."
+            response = {"allowed_action": action,
+                        "action-message": message,
+                        "allowed_players": players_still_to_swap}
+        elif len(players_still_not_finished) == 0:
             # all done
             response = {"allowed_action": "finished",
                         "action-message": "Game over"}
             self.state.game_finished = True
-        elif (not self.this_player.ID in self.state.players_finished) and ((len(self.players) - len(self.state.players_finished)) == 1):
+        elif (self.this_player.ID in players_still_not_finished and 
+              len(players_still_not_finished) == 1):
             # you;re the last player
             response = {"allowed_action": "lost",
                         "action-message": "You lost!"}
-        elif self.this_player.ID in self.state.players_finished:
+        elif self.this_player.ID in self.state.players_finished :
             # this player finished, others havent
-            allowed_players = (list(
-                set(player.ID for player in self.players) - set(self.state.players_finished)))
             response = {"allowed_action": "wait",
                         "action-message": "You've finished - but others are still playing. Please wait.",
-                        "allowed_players": allowed_players}
-        elif len(self.state.players_ready_to_start) < len(self.players):
-            # still some players waiting to swap
-            allowed_players = (list(set(
-                player.ID for player in self.players) - set(self.state.players_ready_to_start)))
-            response = {"allowed_action": "swap",
-                        "action-message": "You can choose to swap cards.",
-                        "allowed_players": allowed_players}
-        else:
-            # ok - so we've not finished the game
+                        "allowed_players": players_still_not_finished}
+        elif self.this_player.ID in players_still_not_finished:
+            # ok - so we've not finished the game overall
+            # this player is still in play too
             # and everyone has swapped
             # so must be in game play
             # check if we're next or have to wait
-            allowed_players = (list(
-                set(player.ID for player in self.players) - set(self.state.players_finished)))
-            is_next_player = self.state.this_player_id == self.state.play_order[0]
+            
+            is_next_player = self.this_player.ID == self.state.play_order[0]
             if is_next_player:
                 # can we actually play or do we have to pick up?
                 card_type, card_stack = self.this_player.which_player_cards_can_player_use()
@@ -491,22 +513,23 @@ class Game(object):
                     # or if we have only face down cards left
                     # let us play
                     action = "play"
-                    action_message = "You can't play - you must pick up cards."
+                    action_message = "Please play your move"
                 else:
                     action = "pick"
-                    action_message = "Please play your move"
+                    action_message = "You can't play - you must pick up cards."
                 response = {"allowed_action": action,
                             "allowed_cards": Card_Types.Short_Name[card_type],
                             "action-message": action_message,
-                            "allowed_players": allowed_players,
+                            "allowed_players": players_still_not_finished,
                             "is_next_player": is_next_player}
             else:
                 # someone else is the next player
                 response = {"allowed_action": "wait",
-                            "allowed_players": allowed_players,
+                            "allowed_players": players_still_not_finished,
                             "is_next_player": is_next_player,
                             "action-message": "wait for others to finish their moves"}
-
+        else:
+            raise ValueError("Unable to calculate game allowed moves")
         return response
 
     def add_to_pile(self, deck_type, cards_to_add=[], *args):
@@ -533,9 +556,11 @@ class Game(object):
         """
         lowest_player = None
         lowest_rank = 999
+
         for player in self.players:
             this_player_lowest_rank = min([card.rank for card in player.hand])
-            if this_player_lowest_rank < lowest_rank:
+            if (this_player_lowest_rank < lowest_rank and
+                this_player_lowest_rank not in self.state.get_all_special_cards()):
                 lowest_player = player.ID
                 lowest_rank = this_player_lowest_rank
 
@@ -653,6 +678,7 @@ class Game(object):
 
         if (not self.this_player.face_down) and (not self.this_player.face_up) and (not self.this_player.hand):
             # has run out of cards. Game over (for them at least)!
+            print("have run out of cards")
             self.state.players_finished.append(self.this_player.ID)
             if (len(self.players) - len(self.state.players_finished)) < 2:
                 # all players in players_finished

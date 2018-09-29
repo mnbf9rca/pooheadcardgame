@@ -116,6 +116,7 @@ def load_game():
     if game.ready_to_start:
         return redirect(url_for("play"))
     else:
+        message = "Game not ready to start yet."
         return redirect(url_for("logged_in") + f"?msg={quote_plus(message)}")
 
 

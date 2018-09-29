@@ -147,7 +147,12 @@ function render_game(result) {
     $('#game-id').text('There is an active game with ID ' + state.game_id + '.');
     // find our player ID
     this_player_id = state.this_player_id;
-    $('#player-id').html('Your player ID is ' + this_player_id + '. There are ' + state["number_of_players_joined"] + ' players in this game. The next player is player with ID ' + state["play_order"][0]);
+    let info_text = 'Your player ID is ' + this_player_id + '. There are ' + state["number_of_players_joined"] + ' players in this game.';
+    if (state["play_order"]){
+        info_text += ' The next player is player with ID ' + state["play_order"][0];
+    };
+    $('#player-id').html(info_text);
+
     // display player cards and return the current player's state as the return value
     this_player = display_players(players_state, this_player_id, allowed_moves);
     display_game_rules(state);
