@@ -18,8 +18,6 @@ network:
   name: default
 
 env_variables:
-    REDIS_HOST: 10.0.0.4
-    REDIS_PORT: 6379
     SQLALCHEMY_DATABASE_URI: >-
       mysql+pymysql://<creds>@/poohead?unix_socket=/cloudsql/pooheadcardgame:europe-west1:poohead-db
     
