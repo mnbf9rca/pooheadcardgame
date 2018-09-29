@@ -238,7 +238,7 @@ class Game(object):
             while 0 in cards:
                 cards.remove(0)
 
-            return List[cards]
+            return set(cards)
 
     class Cards(object):
         """stores cards separately from state to keep secret from client"""
@@ -469,7 +469,7 @@ class Game(object):
         all_player_id = set([player.ID for player in self.players])
         players_still_to_swap = (list(all_player_id - set(self.state.players_ready_to_start)))
         players_still_not_finished = (list(all_player_id - set(self.state.players_finished)))
-
+        print("set(self.state.players_ready_to_start)", set(self.state.players_ready_to_start),"set(self.state.players_finished)",set(self.state.players_finished), "all_player_id", all_player_id, "players_still_to_swap", players_still_to_swap, "players_still_not_finished", players_still_not_finished)
         if len(players_still_to_swap) > 0:
             # still some players not yet ready to start --> must be swapping
             if self.state.this_player_id in players_still_to_swap:
@@ -678,6 +678,7 @@ class Game(object):
 
         if (not self.this_player.face_down) and (not self.this_player.face_up) and (not self.this_player.hand):
             # has run out of cards. Game over (for them at least)!
+            print("have run out of cards")
             self.state.players_finished.append(self.this_player.ID)
             if (len(self.players) - len(self.state.players_finished)) < 2:
                 # all players in players_finished
