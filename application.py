@@ -4,11 +4,15 @@ from tempfile import mkdtemp
 from urllib.parse import quote_plus
 
 import jsonpickle
-import redis
+
 import requests
 from flask import (Flask, flash, jsonify, make_response, redirect,
                    render_template, request, session, url_for)
-from flask_session import Session
+# from flask_sqlalchemy import SQLAlchemy
+# from flask_session import Session
+from flask_sessionstore import Session
+
+# import flask_session.Session
 from flask_sslify import SSLify
 from werkzeug.exceptions import default_exceptions
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -32,19 +36,25 @@ sslify = SSLify(app, permanent=True)
 
 # idea from https://cloud.google.com/appengine/docs/flexible/python/using-cloud-sql
 # Environment variables are defined in app.yaml.
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ['SQLALCHEMY_DATABASE_URI']
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-in_gcp, username, password = controller.get_sql_username_password()
-if username and password:
-    app.config['SQLALCHEMY_DATABASE_URI'] =app.config['SQLALCHEMY_DATABASE_URI'].replace('<creds>', username + ":" + password)
+in_gcp, sqalchemy_database_uri, secret_key = controller.get_sql_username_password()
+if sqalchemy_database_uri and secret_key:
+    app.config['SQLALCHEMY_DATABASE_URI'] = sqalchemy_database_uri
+    app.config['SECRET_KEY'] = secret_key
 else:
-    raise ValueError("Cannot load database connection details - username, password missing")
+    raise ValueError("Cannot load database connection details - sqalchemy_database_uri, secret_key missing")
 
-# get DB connection
 my_db = controller.get_database_connection(app.config['SQLALCHEMY_DATABASE_URI'])
 
-app.config["SESSION_PERMANENT"] = False
+app.config["SESSION_PERMANENT"] = True
+
+# sqalchemy session store
+# except i cant get this to work - sessions never seem to persist
+# sessiondb = SQLAlchemy(app)
+# app.config['SESSION_TYPE'] = 'sqlalchemy'
+# app.config['SESSION_SQLALCHEMY'] = sessiondb
 
 # Configure session to use filesystem (instead of signed cookies)
 app.config["SESSION_FILE_DIR"] = mkdtemp()
@@ -83,7 +93,6 @@ def index():
 @login_required
 def logged_in():
     # user is logged in, check for an active game
-    print("logged_in")
     message = ""
     try:
          message = request.args["msg"]
@@ -225,7 +234,6 @@ def play():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     """Log user in"""
-
     # Forget any user_id
     session.clear()
         # User reached route via POST (as by submitting a form via POST)
@@ -253,6 +261,7 @@ def login():
         
         session["game_id"] = None
         session["game"] = None
+
 
         # Redirect user to home page
         return redirect(url_for("logged_in"))

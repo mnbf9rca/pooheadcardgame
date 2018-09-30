@@ -135,6 +135,7 @@ class SQL(object):
                     elif isinstance(value, str):
                         return sqlalchemy.types.String().literal_processor(dialect)(value)
 
+
                     # None
                     elif isinstance(value, sqlalchemy.sql.elements.Null):
                         return sqlalchemy.types.NullType().literal_processor(dialect)(value)
@@ -172,6 +173,12 @@ class SQL(object):
                 # Translate None to NULL
                 if value is None:
                     value = sqlalchemy.sql.null()
+
+                if (self.engine.url.get_backend_name() in ["postgres", "postgresql"] and
+                        isinstance(value, str) and
+                        value.upper() == 'DEFAULT'):
+                        value = "DEFAULT"
+                        print("adjusted value:", retval)
 
                 if self.engine.url.get_backend_name() == "sqlite":
                      # for some reason, bool isnt being converted to int
@@ -216,7 +223,10 @@ class SQL(object):
             # If INSERT, return primary key value for a newly inserted row
             elif re.search(r"^\s*INSERT", statement, re.I):
                 if self.engine.url.get_backend_name() in ["postgres", "postgresql"]:
-                    result = self.engine.execute(sqlalchemy.text("SELECT LASTVAL()"))
+                    if trans_connection:
+                        result = trans_connection.execute(sqlalchemy.text("SELECT LASTVAL()"))
+                    else:
+                        result = self.engine.execute(sqlalchemy.text("SELECT LASTVAL()"))
                     ret = result.first()[0]
                 else:
                     ret = result.lastrowid

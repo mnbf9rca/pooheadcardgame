@@ -91,7 +91,8 @@ class Player:
                                               trans_connection = trans_connection,
                                               game_id=game_id,
                                               deck_type=Card_Types.CARD_HAND)
-        database_connection.execute('REPLACE INTO player_game (player_id, game_id) VALUES (:user_id, :game_id)',
+
+        database_connection.execute('INSERT INTO player_game (player_id, game_id) VALUES (:user_id, :game_id) ON CONFLICT (player_id, game_id) DO UPDATE SET player_id = :user_id, game_id = :game_id',
                                     trans_connection=trans_connection,
                                     user_id=self.ID,
                                     game_id=game_id)

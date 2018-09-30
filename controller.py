@@ -208,6 +208,11 @@ def get_sql_username_password():
         pass
         gcp = None
 
+    try:
+        sqlalchemy_database_uri = os.environ['SQLALCHEMY_DATABASE_URI']
+    except:
+        raise
+
     if gcp:
         # we're in google cloud
         # fetch sql username and password from metadata
@@ -218,6 +223,8 @@ def get_sql_username_password():
                 metadata_server + 'sqlpassword', headers=metadata_flavor).text
             username = requests.get(
                 metadata_server + 'sqlusername', headers=metadata_flavor).text
+            secret_key = requests.get(
+                metadata_server + 'session_secret', headers=metadata_flavor).text
         except:
             pass
     else:
@@ -227,10 +234,11 @@ def get_sql_username_password():
         try:
             password = os.environ.get('SQLALCHEMY_DATABASE_PASSWORD')
             username = os.environ.get('SQLALCHEMY_DATABASE_USERNAME')
+            secret_key = os.environ.get('SECRET_KEY')
         except:
             pass
-
-    return in_gcp, username, password
+    sqlalchemy_database_uri = sqlalchemy_database_uri.replace('<creds>', username + ":" + password)
+    return in_gcp, sqlalchemy_database_uri, secret_key
 
 
 def get_database_connection(connection_string):

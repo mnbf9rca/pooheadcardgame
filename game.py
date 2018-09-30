@@ -294,36 +294,56 @@ class Game(object):
 
         print("started transaction")
         if not self.state.game_id:
-            querystring = "INSERT INTO games (game_finished, players_requested, game_ready_to_start, game_checksum, players_finished, play_on_anything_cards, play_order, less_than_card, transparent_card, burn_card, reset_card, number_of_decks, number_face_down_cards, number_hand_cards, current_turn_number, players_ready_to_start, deal_done, gameid) VALUES (:game_finished, :number_of_players_requested, :game_ready_to_start, :game_checksum, :players_finished, :play_on_anything_cards,:play_order,:less_than_card,:transparent_card,:burn_card,:reset_card,:number_of_decks,:number_face_down_cards,:number_hand_cards,:current_turn_number,:players_ready_to_start, :deal_done, :game_id)"
-
+            querystring = "INSERT INTO games (game_finished, players_requested, game_ready_to_start, game_checksum, players_finished, play_on_anything_cards, play_order, less_than_card, transparent_card, burn_card, reset_card, number_of_decks, number_face_down_cards, number_hand_cards, current_turn_number, players_ready_to_start, deal_done) VALUES (:game_finished, :number_of_players_requested, :game_ready_to_start, :game_checksum, :players_finished, :play_on_anything_cards,:play_order,:less_than_card,:transparent_card,:burn_card,:reset_card,:number_of_decks,:number_face_down_cards,:number_hand_cards,:current_turn_number,:players_ready_to_start, :deal_done)"
+            result = database_connection.execute(querystring,
+                                                trans_connection=trans_connection,
+                                                game_finished=self.state.game_finished,
+                                                number_of_players_requested=self.state.number_of_players_requested,
+                                                game_ready_to_start=self.ready_to_start,
+                                                game_checksum=self.checksum(),
+                                                players_finished=json.dumps(
+                                                    self.state.players_finished),
+                                                play_on_anything_cards=json.dumps(
+                                                    self.state.play_on_anything_cards),
+                                                play_order=json.dumps(
+                                                    self.state.play_order),
+                                                less_than_card=self.state.less_than_card,
+                                                transparent_card=self.state.transparent_card,
+                                                burn_card=self.state.burn_card,
+                                                reset_card=self.state.reset_card,
+                                                number_of_decks=self.state.number_of_decks,
+                                                number_face_down_cards=self.state.number_face_down_cards,
+                                                number_hand_cards=self.state.number_hand_cards,
+                                                current_turn_number=self.state.current_turn_number,
+                                                players_ready_to_start=json.dumps(
+                                                    self.state.players_ready_to_start),
+                                                deal_done=self.state.deal_done)
         else:
             querystring = "UPDATE games SET game_finished = :game_finished, players_requested = :number_of_players_requested, game_ready_to_start = :game_ready_to_start, game_checksum = :game_checksum, players_finished = :players_finished, play_on_anything_cards = :play_on_anything_cards, play_order = :play_order, less_than_card = :less_than_card, transparent_card = :transparent_card, burn_card = :burn_card, reset_card = :reset_card, number_of_decks = :number_of_decks, number_face_down_cards = :number_face_down_cards ,number_hand_cards = :number_hand_cards,current_turn_number = :current_turn_number, players_ready_to_start = :players_ready_to_start, deal_done = :deal_done WHERE gameid = :game_id"
-
-        print(f"calling database.execute for {querystring}")
-        result = database_connection.execute(querystring,
-                                             trans_connection=trans_connection,
-                                             game_finished=self.state.game_finished,
-                                             number_of_players_requested=self.state.number_of_players_requested,
-                                             game_ready_to_start=self.ready_to_start,
-                                             game_checksum=self.checksum(),
-                                             players_finished=json.dumps(
-                                                 self.state.players_finished),
-                                             play_on_anything_cards=json.dumps(
-                                                 self.state.play_on_anything_cards),
-                                             play_order=json.dumps(
-                                                 self.state.play_order),
-                                             less_than_card=self.state.less_than_card,
-                                             transparent_card=self.state.transparent_card,
-                                             burn_card=self.state.burn_card,
-                                             reset_card=self.state.reset_card,
-                                             number_of_decks=self.state.number_of_decks,
-                                             number_face_down_cards=self.state.number_face_down_cards,
-                                             number_hand_cards=self.state.number_hand_cards,
-                                             current_turn_number=self.state.current_turn_number,
-                                             players_ready_to_start=json.dumps(
-                                                 self.state.players_ready_to_start),
-                                             deal_done=self.state.deal_done,
-                                             game_id=self.state.game_id)
+            result = database_connection.execute(querystring,
+                                                trans_connection=trans_connection,
+                                                game_finished=self.state.game_finished,
+                                                number_of_players_requested=self.state.number_of_players_requested,
+                                                game_ready_to_start=self.ready_to_start,
+                                                game_checksum=self.checksum(),
+                                                players_finished=json.dumps(
+                                                    self.state.players_finished),
+                                                play_on_anything_cards=json.dumps(
+                                                    self.state.play_on_anything_cards),
+                                                play_order=json.dumps(
+                                                    self.state.play_order),
+                                                less_than_card=self.state.less_than_card,
+                                                transparent_card=self.state.transparent_card,
+                                                burn_card=self.state.burn_card,
+                                                reset_card=self.state.reset_card,
+                                                number_of_decks=self.state.number_of_decks,
+                                                number_face_down_cards=self.state.number_face_down_cards,
+                                                number_hand_cards=self.state.number_hand_cards,
+                                                current_turn_number=self.state.current_turn_number,
+                                                players_ready_to_start=json.dumps(
+                                                    self.state.players_ready_to_start),
+                                                deal_done=self.state.deal_done,
+                                                game_id=game_id)
 
         print("returned from trans_connection.execute")
         if not result:
