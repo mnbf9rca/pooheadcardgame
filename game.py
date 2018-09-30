@@ -5,9 +5,14 @@ from typing import List
 
 import jsonpickle
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.declarative import declarative_base
+
 
 from cards import Card, Card_Types, Deck
 from player import Player
+
+Base = declarative_base()
+
 
 
 class Game(object):
@@ -343,7 +348,7 @@ class Game(object):
                                                 players_ready_to_start=json.dumps(
                                                     self.state.players_ready_to_start),
                                                 deal_done=self.state.deal_done,
-                                                game_id=game_id)
+                                                game_id=self.state.game_id)
 
         print("returned from trans_connection.execute")
         if not result:
@@ -424,10 +429,9 @@ class Game(object):
         # fields not retrieved: `last_move_at`, `gameid`,`checksum`,`game_ready_to_start`
         config = database_connection.execute("SELECT game_finished, players_requested, players_finished, play_on_anything_cards, play_order, less_than_card,transparent_card,burn_card,reset_card,number_of_decks,number_face_down_cards,number_hand_cards,current_turn_number,last_player, players_ready_to_start, deal_done FROM games WHERE gameid = :game_id",
                                              game_id=self.state.game_id)
-        print("config", jsonpickle.dumps(config, unpicklable=False))
+        print("config loaded:", jsonpickle.dumps(config, unpicklable=False))
         config = config[0]
-        print("config", jsonpickle.dumps(config, unpicklable=False))
-        self.state.game_finished = int(config["game_finished"])
+        self.state.game_finished = config["game_finished"]
         self.state.number_of_players_requested = int(
             config["players_requested"])
         self.state.players_finished = json.loads(config["players_finished"])
@@ -445,7 +449,7 @@ class Game(object):
         self.state.current_turn_number = int(config["current_turn_number"])
         self.state.players_ready_to_start = json.loads(
             config["players_ready_to_start"])
-        self.state.deal_done = int(config["deal_done"])
+        self.state.deal_done = config["deal_done"]
 
         # load decks
         self.cards.pile_deck = self.__load_cards_from_database(

@@ -1,5 +1,23 @@
-from cards import Card_Types, Card
 import jsonpickle
+from sqlalchemy import (TIMESTAMP, Boolean, Column, Integer, String,
+                        create_engine)
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+
+from cards import Card, Card_Types
+
+Base = declarative_base()
+class Model_Player(Base):
+    __tablename__ = 'users'
+    player_id = Column(Integer, primary_key = True)
+    player_name = Column(String)
+    last_played_at = Column(TIMESTAMP(timezone=False))
+    hash = Column(String)
+    username = Column(String)
+    is_admin = Column(Boolean)
+
+    def __repr__(self):
+        return f"<User(id='{self.player_id}', username='{self.username}' name='{self.player_name}', last_played_at='{self.last_played_at}')>"
 
 
 class Player:

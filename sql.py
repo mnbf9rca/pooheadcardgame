@@ -87,10 +87,11 @@ class SQL(object):
         # Default
         return str(e)
 
-    def execute(self, text, trans_connection = None, **params):
+    def parse_sql_statement(self, text, **params):
         """
-        Execute a SQL statement.
+        Parse and bind paramaters to create a SQL statement.
         """
+
         class UserDefinedType(sqlalchemy.TypeDecorator):
             """
             Add support for expandable values, a la https://bitbucket.org/zzzeek/sqlalchemy/issues/3953/expanding-parameter.
@@ -158,14 +159,14 @@ class SQL(object):
 
         # Raise exceptions for warnings
         warnings.filterwarnings("error")
-
+        log = re.sub(r"\n\s*", " ", text)
 
         # Prepare, execute statement
         try:
 
             # Construct a new TextClause clause
             statement = sqlalchemy.text(text)
-
+            
 
             # Iterate over parameters
             for key, value in params.items():
@@ -173,12 +174,6 @@ class SQL(object):
                 # Translate None to NULL
                 if value is None:
                     value = sqlalchemy.sql.null()
-
-                if (self.engine.url.get_backend_name() in ["postgres", "postgresql"] and
-                        isinstance(value, str) and
-                        value.upper() == 'DEFAULT'):
-                        value = "DEFAULT"
-                        print("adjusted value:", retval)
 
                 if self.engine.url.get_backend_name() == "sqlite":
                      # for some reason, bool isnt being converted to int
@@ -195,6 +190,27 @@ class SQL(object):
             # Stringify bound parameters
             # http://docs.sqlalchemy.org/en/latest/faq/sqlexpressions.html#how-do-i-render-sql-expressions-as-strings-possibly-with-bound-parameters-inlined
             statement = str(statement.compile(compile_kwargs={"literal_binds": True}))
+            log = re.sub(r"\n\s*", " ", sqlparse.format(statement, reindent=True))
+            return statement
+        except:
+            self.logger.debug(termcolor.colored(log, "red"))
+            self.logger.debug(termcolor.colored(sys.exc_info()[0], "red"))
+            
+            raise
+
+    def execute(self, text, trans_connection = None, **params):
+        """
+        Execute a SQL statement.
+        """
+        print("text", text)
+
+        # Raise exceptions for warnings
+        warnings.filterwarnings("error")
+
+        # Prepare, execute statement
+        try:
+
+            statement = SQL.parse_sql_statement(self, text = text, **params)
 
             # Statement for logging
             log = re.sub(r"\n\s*", " ", sqlparse.format(statement, reindent=True))
@@ -203,7 +219,6 @@ class SQL(object):
             if trans_connection:
                 print(f"Attempting to execute transactional query: {statement}")
                 result = trans_connection.execute(statement)
-                print(f"completed transactional query, result.lastrowid: {result.lastrowid}")
             else:
                 print(f"Attempting to execute regular query: {statement}")
                 result = self.engine.execute(statement)
@@ -224,10 +239,14 @@ class SQL(object):
             elif re.search(r"^\s*INSERT", statement, re.I):
                 if self.engine.url.get_backend_name() in ["postgres", "postgresql"]:
                     if trans_connection:
-                        result = trans_connection.execute(sqlalchemy.text("SELECT LASTVAL()"))
+                        try:
+                            result = trans_connection.execute(sqlalchemy.text("SELECT LASTVAL()"))
+                            ret = result.first()[0]
+                        except:
+                            ret = True
                     else:
                         result = self.engine.execute(sqlalchemy.text("SELECT LASTVAL()"))
-                    ret = result.first()[0]
+                        ret = result.first()[0]
                 else:
                     ret = result.lastrowid
                 if (ret == 0):

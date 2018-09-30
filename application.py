@@ -11,6 +11,8 @@ from flask import (Flask, flash, jsonify, make_response, redirect,
 # from flask_sqlalchemy import SQLAlchemy
 # from flask_session import Session
 from flask_sessionstore import Session
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 # import flask_session.Session
 from flask_sslify import SSLify
@@ -19,12 +21,13 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 import controller
 from application_helpers import admin_user_required
+import database_connection
 from cards import Card, Deck
 from game import (Game, get_list_of_games_for_this_user,
                   get_list_of_games_looking_for_players, get_users_for_game)
 # from https://github.com/cs50/python-cs50
 from helpers import apology, login_required, lookup
-from player import Player
+from player import Player, Model_Player
 # from https://github.com/cs50/python-cs50
 from sql import SQL
 
@@ -39,14 +42,17 @@ sslify = SSLify(app, permanent=True)
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-in_gcp, sqalchemy_database_uri, secret_key = controller.get_sql_username_password()
-if sqalchemy_database_uri and secret_key:
+
+c = controller.Controller()
+
+execution_only_db = c.execution_only
+sqalchemy_database_uri = c.sqalchemy_database_uri
+secret_key = c.secret_key
+if execution_only_db and sqalchemy_database_uri and secret_key:
     app.config['SQLALCHEMY_DATABASE_URI'] = sqalchemy_database_uri
     app.config['SECRET_KEY'] = secret_key
 else:
     raise ValueError("Cannot load database connection details - sqalchemy_database_uri, secret_key missing")
-
-my_db = controller.get_database_connection(app.config['SQLALCHEMY_DATABASE_URI'])
 
 app.config["SESSION_PERMANENT"] = True
 
@@ -77,9 +83,6 @@ def after_request(response):
     response.headers["Pragma"] = "no-cache"
     return response
 
-
-
-
 @app.route("/")
 def index():
     if session:
@@ -101,8 +104,8 @@ def logged_in():
     except:
         raise
 
-    games = get_list_of_games_for_this_user(session["user_id"], my_db)
-    new_games = get_list_of_games_looking_for_players(session["user_id"], my_db)
+    games = get_list_of_games_for_this_user(session["user_id"], execution_only_db)
+    new_games = get_list_of_games_looking_for_players(session["user_id"], execution_only_db)
     return render_template("logged_in.html", games=games, new_games=new_games, message = message)
 
 @app.route("/load_game")
@@ -113,7 +116,7 @@ def load_game():
         return apology("must provide game id", 500)
     
     game_id = int(game_id)
-    game = controller.do_load_game(game_id, session["user_id"], my_db)
+    game = controller.do_load_game(game_id, session["user_id"], execution_only_db)
     if not game:
         # TODO make this better...
         return "error"
@@ -125,7 +128,7 @@ def load_game():
     if add:
         # would like to be added to this game
         # check the users playing this game
-        response = controller.do_add_to_game(game, my_db)
+        response = controller.do_add_to_game(game, execution_only_db)
         message = response["message"]
 
     if game.ready_to_start:
@@ -146,7 +149,7 @@ def play_cards():
             response = {'action':'unknown', 'action_result':False, 'action_message': "submit your request via POST using JSON"}
         else:
             request_json = request.get_json(cache=False)
-            response = controller.do_playcards(request_json, session["game"], my_db)
+            response = controller.do_playcards(request_json, session["game"], execution_only_db)
             return jsonpickle.encode(response, unpicklable=False)
     else:
         response = {'action':"any", 'action_result':False, 'action_message':"no active game"}
@@ -159,7 +162,7 @@ def checkstate():
         and the latest held in game state in session """
     game = session["game"]
     response = {"action":"haschanged",
-                "database_checksum": game.get_database_checksum(my_db)}
+                "database_checksum": game.get_database_checksum(execution_only_db)}
     return json.dumps(response)
 
 
@@ -169,7 +172,7 @@ def getgamestate():
     """returns a JSON object to caller with a summary of the current
        state of the game, excluding sensitive information such as
        hidden cards, cards in other players' hands, or the deck"""
-    state = controller.get_game_state(session["game"], my_db)
+    state = controller.get_game_state(session["game"], execution_only_db)
     resp = make_response(jsonpickle.encode(state, unpicklable=False), 200)
     resp.headers['Content-Type']= 'application/json'
     return resp
@@ -199,7 +202,7 @@ def startnewgame():
         # and validate the other new game properties
         if request.is_json:
             request_json = request.get_json(cache=False)
-            response, game = controller.do_start_new_game(request_json, session["user_id"],my_db)
+            response, game = controller.do_start_new_game(request_json, session["user_id"],execution_only_db)
             if game:
                 session["game_id"] = game.state.game_id
                 session["game"] = game
@@ -228,7 +231,7 @@ def play():
     else:
         # take game from session
         game = session["game"]
-        game.load(my_db)
+        game.load(execution_only_db)
         return render_template("play.html")
 
 @app.route("/login", methods=["GET", "POST"])
@@ -247,24 +250,19 @@ def login():
         elif not request.form.get("password"):
             return apology("must provide password", 403)
 
-        # Query database for username
-        rows = my_db.execute("SELECT player_id, hash, is_admin FROM users WHERE username = :username",
-                          username=request.form.get("username").lower())
+        username = request.form.get("username").lower()
+        password = request.form.get("password")
 
-        # Ensure username exists and password is correct
-        if len(rows) != 1 or not check_password_hash(rows[0]["hash"], request.form.get("password")):
-            return apology("invalid username and/or password", 403)
-
-        # Remember which user has logged in
-        session["user_id"] = rows[0]["player_id"]
-        session["is_admin"] = rows[0]["is_admin"]
-        
-        session["game_id"] = None
-        session["game"] = None
-
-
-        # Redirect user to home page
-        return redirect(url_for("logged_in"))
+        user_id, is_admin = controller.do_login(username, password)
+        if user_id:
+            session["user_id"] = user_id
+            session["is_admin"] = is_admin
+            session["password"] = password
+            session["game"] = None
+            session["game_id"] = None
+            return redirect(url_for("logged_in"))
+        else:
+            return apology("Incorrect username or password", 403)
 
     # User reached route via GET (as by clicking a link or via redirect)
     else:
@@ -276,7 +274,7 @@ def logout():
     """Log user out"""
     game = session.get("game")
     if game:
-        controller.do_save_game(game, my_db)
+        controller.do_save_game(game, execution_only_db)
     # Forget any user_id
     session.clear()
 
@@ -304,13 +302,13 @@ def register():
             return apology("passwords must match", 400)
 
         # Query database for username
-        rows = my_db.execute("SELECT player_id, hash FROM users WHERE username = :username",
+        rows = execution_only_db.execute("SELECT player_id, hash FROM users WHERE username = :username",
                           username=request.form.get("username"))
 
         if len(rows) != 0:
             return apology("username already taken, sorry")
 
-        result = my_db.execute("INSERT INTO users (username, hash) VALUES (:username, :password_hash)",
+        result = execution_only_db.execute("INSERT INTO users (username, hash) VALUES (:username, :password_hash)",
                           username=request.form.get("username").lower(), password_hash=generate_password_hash(request.form.get("password")))
         if not result:
             return apology("could not register")

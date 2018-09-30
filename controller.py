@@ -1,13 +1,89 @@
 import json
 import os
-from game import Game, get_users_for_game
-from player import Player
-from cards import Card, Card_Types, Deck
-import jsonpickle
-import requests
-
-from sql import SQL
 from urllib.parse import quote_plus
+
+import jsonpickle
+from werkzeug.security import check_password_hash, generate_password_hash
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+import database_connection
+from cards import Card, Card_Types, Deck
+from game import Game, get_users_for_game
+from player import Model_Player, Player
+from sql import SQL
+
+my_ref = None
+class Controller():
+    class __Controller():
+        __common_engine = None
+        __common_Session = None
+        __execution_only = None
+        __sqalchemy_database_uri = None
+        __secret_key = None
+        def __init__(self):
+            """initiates Controller to fetch SQL connection details and instantiate a single engine connection.
+            
+            properties:
+            sqalchemy_database_uri --> string --> URI of the connected DB
+            execution_only --> SQL object --> wrapper using SQL class to provide swift execution-only SQL
+            common_Session --> sqlalchemy.orm.session.Session --> used for session management.
+            secret_key --> string --> secret key for flask sessions
+            """
+            in_gcp, dburi, sk = database_connection.get_sql_username_password()
+            self.__sqalchemy_database_uri = dburi
+            self.__secret_key = sk
+            self.__execution_only, self.__common_engine = database_connection.get_database_connection(self.__sqalchemy_database_uri)
+            self.__common_Session = sessionmaker(bind = self.__common_engine)
+            my_ref = self
+            
+        def __get_execution_only(self):
+            return self.__execution_only
+        execution_only = property(__get_execution_only)
+    
+        def __get_common_Session(self):
+            return self.__common_Session
+        common_Session = property(__get_common_Session)
+        
+        
+        def __get_sqalchemy_database_uri(self):
+            return self.__sqalchemy_database_uri
+        sqalchemy_database_uri = property(__get_sqalchemy_database_uri)
+
+        
+        def __get_secret_key(self):
+            return self.__secret_key
+        secret_key = property(__get_secret_key)
+
+    instance = None
+    def __new__(cls): # __new__ always a classmethod
+        if not Controller.instance:
+            Controller.instance = Controller.__Controller()
+        return Controller.instance
+    def __getattr__(self, name):
+        return getattr(self.instance, name)
+
+    
+ 
+
+
+def do_login(username, password):
+    """checks the username and password. If valid returns the user's ID and whether they have admin rights or not"""
+
+    login_session =  Controller().common_Session()
+    
+    query = login_session.query(Model_Player).filter(Model_Player.username == username).order_by(Model_Player.player_id)
+
+    if query.count() != 1 or not check_password_hash(query.first().hash, password):
+        login_session.close()
+        return None, None
+    
+    else:
+        found_user = query.first()
+        login_session.close()
+
+        return found_user.player_id, found_user.is_admin
+
 
 def do_save_game(game, database_connection):
     game.save(database_connection)
@@ -59,7 +135,7 @@ def do_add_to_game(game, database_connection):
 
 def __do_deal_if_game_ready(game, dabase_connection):
     """checks if the game is ready to start and if this player is in
-       the players list"""
+    the players list"""
     if not game:
         raise ValueError("Tried to __do_deal_if_game_ready without game")
     if (game.ready_to_start and
@@ -96,7 +172,7 @@ def do_start_new_game(request_json, this_player_user_id, database_connection):
 
 def do_playcards(request_json, game, database_connection):
     """validates that a user is allowed to play a specific action
-       and if so, executes that action and returns the result"""
+    and if so, executes that action and returns the result"""
     # first, let's get the action and respond with a failure if we can't.
     if not request_json:
         raise ValueError("do_playcards called without valid request_json")
@@ -153,8 +229,8 @@ def do_playcards(request_json, game, database_connection):
 
 def get_game_state(game, database_connection):
     """calculates the game state that a given player is allowed
-       to see (e.g. they can see their own hand cards, but not)
-       the hand cards of other players) and returns it"""
+    to see (e.g. they can see their own hand cards, but not)
+    the hand cards of other players) and returns it"""
     if not game:
         # set default response to indicate no active game
         return {"active-game": False}
@@ -165,7 +241,7 @@ def get_game_state(game, database_connection):
     # always reload in case other users have caused a state change
     game.load(database_connection)
     game_state = {'active-game': True,
-                  "state": game.state}
+                "state": game.state}
     # calculate the allowed moves at this stage of teh game for this player
     allowed_moves = game.calculate_player_allowed_actions()
 
@@ -182,70 +258,9 @@ def get_game_state(game, database_connection):
 
     # construct response
     total_state = {'game': game_state,
-                   'allowed_moves': allowed_moves,
-                   'players_state': players_state,
-                   "checksum": game.checksum()}
+                'allowed_moves': allowed_moves,
+                'players_state': players_state,
+                "checksum": game.checksum()}
 
     print("total_state:", jsonpickle.dumps(total_state, unpicklable=False))
     return total_state
-
-
-def get_sql_username_password():
-    """attempts to fetch username and password from google metadata
-       server. If it can't do that, it attempts to retrieve them from
-       environment variables.
-       """
-
-    username, password = None, None
-    metadata_server = "http://metadata.google.internal/computeMetadata/v1/instance/"
-    metadata_flavor = {'Metadata-Flavor': 'Google'}
-
-    try:
-        # let's try and fetch metadata from the google cloud internal metadata server
-        # if this fails, then we're running locally
-        gcp = requests.get(metadata_server, headers=metadata_flavor).text
-    except:
-        pass
-        gcp = None
-
-    try:
-        sqlalchemy_database_uri = os.environ['SQLALCHEMY_DATABASE_URI']
-    except:
-        raise
-
-    if gcp:
-        # we're in google cloud
-        # fetch sql username and password from metadata
-        metadata_server = "http://metadata/computeMetadata/v1/project/attributes/"
-        in_gcp = True
-        try:
-            password = requests.get(
-                metadata_server + 'sqlpassword', headers=metadata_flavor).text
-            username = requests.get(
-                metadata_server + 'sqlusername', headers=metadata_flavor).text
-            secret_key = requests.get(
-                metadata_server + 'session_secret', headers=metadata_flavor).text
-        except:
-            pass
-    else:
-        # not in GCP
-        # find credentials from environment variable
-        in_gcp = False
-        try:
-            password = os.environ.get('SQLALCHEMY_DATABASE_PASSWORD')
-            username = os.environ.get('SQLALCHEMY_DATABASE_USERNAME')
-            secret_key = os.environ.get('SECRET_KEY')
-        except:
-            pass
-    sqlalchemy_database_uri = sqlalchemy_database_uri.replace('<creds>', username + ":" + password)
-    return in_gcp, sqlalchemy_database_uri, secret_key
-
-
-def get_database_connection(connection_string):
-    """opens a connection to the database"""
-    try:
-        db = SQL(connection_string)
-    except:
-        raise
-
-    return db
