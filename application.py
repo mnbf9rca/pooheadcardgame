@@ -20,6 +20,7 @@ from werkzeug.exceptions import default_exceptions
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import controller
+import common_db
 from application_helpers import admin_user_required
 import database_connection
 from cards import Card, Deck
@@ -43,7 +44,7 @@ sslify = SSLify(app, permanent=True)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 
-c = controller.Controller()
+c = common_db.Common_DB()
 
 execution_only_db = c.execution_only
 sqalchemy_database_uri = c.sqalchemy_database_uri

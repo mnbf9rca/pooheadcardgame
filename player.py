@@ -5,11 +5,14 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
 from cards import Card, Card_Types
+import common_db
 
 Base = declarative_base()
+
+
 class Model_Player(Base):
     __tablename__ = 'users'
-    player_id = Column(Integer, primary_key = True)
+    player_id = Column(Integer, primary_key=True)
     player_name = Column(String)
     last_played_at = Column(TIMESTAMP(timezone=False))
     hash = Column(String)
@@ -18,6 +21,34 @@ class Model_Player(Base):
 
     def __repr__(self):
         return f"<User(id='{self.player_id}', username='{self.username}' name='{self.player_name}', last_played_at='{self.last_played_at}')>"
+
+class Model_Player_Game(Base):
+    __tablename__ = 'player_game'
+    player_id = Column(Integer, primary_key=True)
+    game_id = Column(Integer, primary_key=True)
+
+class Model_Player_Cards(Base):
+    __tablename__ = 'player_game_cards'
+    player_id = Column(Integer, primary_key=True)
+    game_id = Column(Integer, primary_key=True)
+    card_type = Column(Integer, primary_key=True)
+    card_suit = Column(Integer, primary_key=True)
+    card_rank = Column(Integer, primary_key=True)
+    card_sequence = Column(Integer)
+
+    def __repr__(self):
+        return f"<Player Card(Player_ID='{self.player_id}', game_id='{self.game_id}' type='{self.type}', rank='{self.rank}', suit='{self.suit}')>"
+
+
+def get_player_for_username(username):
+    login_session = common_db.Common_DB().common_Session()
+
+    query = login_session.query(Model_Player).filter(
+        Model_Player.username == username).order_by(Model_Player.player_id)
+
+    login_session.close()
+
+    return query
 
 
 class Player:
@@ -50,7 +81,7 @@ class Player:
         # clear existing records
         result = False
         database_connection.execute("DELETE FROM player_game_cards WHERE player_id = :player_id AND card_type=:card_type AND game_id = :game_id",
-                                    trans_connection = trans_connection,
+                                    trans_connection=trans_connection,
                                     player_id=self.ID,
                                     card_type=deck_type,
                                     game_id=game_id)
@@ -64,7 +95,7 @@ class Player:
             cards = ", ".join(cards)
             result = database_connection.execute(
                 f"INSERT INTO player_game_cards (player_id, game_id, card_type, card_suit, card_rank, card_sequence) VALUES {cards};",
-                trans_connection = trans_connection)
+                trans_connection=trans_connection)
         else:
             # no cards - return true
             result = True
@@ -77,36 +108,77 @@ class Player:
         else:
             return result
 
-    def load_player_cards(self, database_connection, game_id, deck_type):
-        print("about to load cards for player ID " + str(self.ID) +
+    def persist_player_cards_to_database_orm(self, session, game_id, deck_type, deck=[], *args) :
+        """save a given deck"""
+        # clear existing records
+
+        _ = session.query(Model_Player_Cards).\
+        filter(Model_Player_Cards.player_id == self.ID).\
+        filter(Model_Player_Cards.card_type == deck_type).\
+        filter(Model_Player_Cards.game_id == game_id).\
+        delete()
+
+
+        i = 0
+        player_cards = []
+        for card in deck:
+            player_cards.append(Model_Player_Cards(player_id = self.ID, game_id = game_id, card_type = deck_type, card_suit = card.suit, card_rank = card.rank, card_sequence = i) )
+        if player_cards:
+            session.add_all(player_cards)
+        print(f"done persisting cards for game_id '{game_id}' and player_id '{self.ID}' and card_type '{deck_type}''")
+        return
+
+    def load_player_cards_orm(self, card_session, game_id, deck_type):
+        print("about to use ORM to load cards for player ID " + str(self.ID) +
               " for game " + str(game_id) + " with type " + str(deck_type) + ".")
-        cards = database_connection.execute("SELECT card_suit, card_rank FROM player_game_cards WHERE player_id = :player_id AND card_type = :card_type AND game_id = :game_id ORDER BY card_rank, card_suit ASC",
-                                            player_id=self.ID,
-                                            card_type=deck_type,
-                                            game_id=game_id)
+
+        
+        cards = card_session.query(Model_Player_Cards).\
+            filter(Model_Player_Cards.player_id == self.ID).\
+            filter(Model_Player_Cards.card_type == deck_type).\
+            filter(Model_Player_Cards.game_id == game_id)
+
         cards_to_return = []
-        if len(cards) > 0:
-            cards_to_return.extend(
-                [Card(card["card_suit"], card["card_rank"]) for card in cards])
-        print("returning " + str(len(cards_to_return)))
+        # if cards.count() > 0:
+        cards_to_return.extend(
+            [Card(card.card_suit, card.card_rank) for card in cards])
+        print("returning " + str(len(cards_to_return)) + ' cards')
+
+        
         return cards_to_return
 
-    def save(self, database_connection, game_id, trans_connection = None):
+    def save(self, database_connection, game_id, trans_connection=None):
+        """saves the current player's game state, including registering this player as playing this game"""
+        print("saving player:", jsonpickle.dumps(self, unpicklable=False))
+        player_session = common_db.Common_DB().common_Session()
+        self.persist_player_cards_to_database_orm(player_session, game_id, Card_Types.CARD_FACE_DOWN, self.face_down)
+        self.persist_player_cards_to_database_orm(player_session, game_id, Card_Types.CARD_FACE_UP, self.face_up)
+        self.persist_player_cards_to_database_orm(player_session, game_id, Card_Types.CARD_HAND, self.hand)
+
+        this_player_game = player_session.query(Model_Player_Game).filter(Model_Player_Game.player_id == self.ID).filter(Model_Player_Game.game_id == game_id).first()
+        this_player_game = Model_Player_Game(player_id = self.ID, game_id = game_id)
+        player_session.add(this_player_game)
+        print("about to commit")
+        player_session.commit()
+        print("committed")
+        return
+
+    def save_old(self, database_connection, game_id, trans_connection=None):
         """saves the current player's game state, including registering this player as playing this game"""
         print("saving player:", jsonpickle.dumps(self, unpicklable=True))
         self.persist_player_cards_to_database(self.face_down,
                                               database_connection=database_connection,
-                                              trans_connection = trans_connection,
+                                              trans_connection=trans_connection,
                                               game_id=game_id,
                                               deck_type=Card_Types.CARD_FACE_DOWN)
         self.persist_player_cards_to_database(self.face_up,
                                               database_connection=database_connection,
-                                              trans_connection = trans_connection,
+                                              trans_connection=trans_connection,
                                               game_id=game_id,
                                               deck_type=Card_Types.CARD_FACE_UP)
         self.persist_player_cards_to_database(self.hand,
                                               database_connection=database_connection,
-                                              trans_connection = trans_connection,
+                                              trans_connection=trans_connection,
                                               game_id=game_id,
                                               deck_type=Card_Types.CARD_HAND)
 
@@ -120,17 +192,15 @@ class Player:
         """loads the cards for each card type for the current player"""
         if not self.ID:
             raise ValueError('tried to load game without setting a player ID.')
-
+        card_session = common_db.Common_DB().common_Session()
         print("loading cards...")
-        self.face_down = self.load_player_cards(
-            database_connection, game_id, Card_Types.CARD_FACE_DOWN)
+        self.face_down = self.load_player_cards_orm(card_session, game_id, Card_Types.CARD_FACE_DOWN)
         print("loaded face down")
-        self.face_up = self.load_player_cards(
-            database_connection, game_id, Card_Types.CARD_FACE_UP)
+        self.face_up = self.load_player_cards_orm(card_session, game_id, Card_Types.CARD_FACE_UP)
         print("loaded face up")
-        self.hand = self.load_player_cards(
-            database_connection, game_id, Card_Types.CARD_HAND)
+        self.hand = self.load_player_cards_orm(card_session, game_id, Card_Types.CARD_HAND)
         print("loaded hand")
+        card_session.close()
         return
 
     def add_cards_to_player_cards(self, cards_to_add, card_type):

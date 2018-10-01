@@ -7,80 +7,26 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-import database_connection
+import common_db
 from cards import Card, Card_Types, Deck
 from game import Game, get_users_for_game
-from player import Model_Player, Player
+from player import Model_Player, Player, get_player_for_username
 from sql import SQL
 
-my_ref = None
-class Controller():
-    class __Controller():
-        __common_engine = None
-        __common_Session = None
-        __execution_only = None
-        __sqalchemy_database_uri = None
-        __secret_key = None
-        def __init__(self):
-            """initiates Controller to fetch SQL connection details and instantiate a single engine connection.
-            
-            properties:
-            sqalchemy_database_uri --> string --> URI of the connected DB
-            execution_only --> SQL object --> wrapper using SQL class to provide swift execution-only SQL
-            common_Session --> sqlalchemy.orm.session.Session --> used for session management.
-            secret_key --> string --> secret key for flask sessions
-            """
-            in_gcp, dburi, sk = database_connection.get_sql_username_password()
-            self.__sqalchemy_database_uri = dburi
-            self.__secret_key = sk
-            self.__execution_only, self.__common_engine = database_connection.get_database_connection(self.__sqalchemy_database_uri)
-            self.__common_Session = sessionmaker(bind = self.__common_engine)
-            my_ref = self
-            
-        def __get_execution_only(self):
-            return self.__execution_only
-        execution_only = property(__get_execution_only)
-    
-        def __get_common_Session(self):
-            return self.__common_Session
-        common_Session = property(__get_common_Session)
-        
-        
-        def __get_sqalchemy_database_uri(self):
-            return self.__sqalchemy_database_uri
-        sqalchemy_database_uri = property(__get_sqalchemy_database_uri)
 
-        
-        def __get_secret_key(self):
-            return self.__secret_key
-        secret_key = property(__get_secret_key)
-
-    instance = None
-    def __new__(cls): # __new__ always a classmethod
-        if not Controller.instance:
-            Controller.instance = Controller.__Controller()
-        return Controller.instance
-    def __getattr__(self, name):
-        return getattr(self.instance, name)
-
-    
  
 
 
 def do_login(username, password):
     """checks the username and password. If valid returns the user's ID and whether they have admin rights or not"""
 
-    login_session =  Controller().common_Session()
-    
-    query = login_session.query(Model_Player).filter(Model_Player.username == username).order_by(Model_Player.player_id)
+    query = get_player_for_username(username)
 
     if query.count() != 1 or not check_password_hash(query.first().hash, password):
-        login_session.close()
         return None, None
     
     else:
         found_user = query.first()
-        login_session.close()
 
         return found_user.player_id, found_user.is_admin
 
