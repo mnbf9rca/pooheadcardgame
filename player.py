@@ -6,41 +6,7 @@ from sqlalchemy.orm import relationship, sessionmaker, subqueryload
 
 import common_db
 from cards import Card, Card_Types
-
-Base = declarative_base()
-
-
-class Model_Player(Base):
-    __tablename__ = 'users'
-    player_id = Column(Integer, primary_key=True)
-    player_name = Column(String)
-    last_played_at = Column(TIMESTAMP(timezone=False))
-    hash = Column(String)
-    username = Column(String)
-    is_admin = Column(Boolean)
-    holds_cards = relationship("Model_Player_Cards", back_populates="player")
-
-    def __repr__(self):
-        return f"<User(id='{self.player_id}', username='{self.username}' name='{self.player_name}', last_played_at='{self.last_played_at}')>"
-
-class Model_Player_Game(Base):
-    __tablename__ = 'player_game'
-    player_id = Column(Integer, primary_key=True)
-    game_id = Column(Integer, primary_key=True)
-
-class Model_Player_Cards(Base):
-    __tablename__ = 'player_game_cards'
-    player_id = Column(Integer, ForeignKey('users.player_id'), primary_key=True)
-    game_id = Column(Integer, primary_key=True)
-    card_type = Column(Integer, primary_key=True)
-    card_suit = Column(Integer, primary_key=True)
-    card_rank = Column(Integer, primary_key=True)
-    card_sequence = Column(Integer)
-
-    player = relationship("Model_Player", back_populates="holds_cards")
-
-    def __repr__(self):
-        return f"<Player Card(Player_ID='{self.player_id}', game_id='{self.game_id}' type='{self.type}', rank='{self.rank}', suit='{self.suit}')>"
+from models import Model_Player, Model_Card, Model_Player_Game
 
 
 def get_player_for_username(username):
@@ -116,16 +82,16 @@ class Player:
         """save a given deck"""
         # clear existing records
 
-        _ = session.query(Model_Player_Cards).\
-        filter(Model_Player_Cards.player_id == self.ID).\
-        filter(Model_Player_Cards.card_type == deck_type).\
-        filter(Model_Player_Cards.game_id == game_id).\
+        _ = session.query(Model_Card).\
+        filter(Model_Card.player_id == self.ID).\
+        filter(Model_Card.card_type == deck_type).\
+        filter(Model_Card.game_id == game_id).\
         delete()
 
         i = 0
         player_cards = []
         for card in deck:
-            player_cards.append(Model_Player_Cards(player_id = self.ID, game_id = game_id, card_type = deck_type, card_suit = card.suit, card_rank = card.rank, card_sequence = i) )
+            player_cards.append(Model_Card(player_id = self.ID, game_id = game_id, card_type = deck_type, card_suit = card.suit, card_rank = card.rank, card_sequence = i) )
         if player_cards:
             session.add_all(player_cards)
         print(f"done persisting cards for game_id '{game_id}' and player_id '{self.ID}' and card_type '{deck_type}''")
@@ -136,10 +102,10 @@ class Player:
               " for game " + str(game_id) + " with type " + str(deck_type) + ".")
 
         
-        cards = card_session.query(Model_Player_Cards).\
-            filter(Model_Player_Cards.player_id == self.ID).\
-            filter(Model_Player_Cards.card_type == deck_type).\
-            filter(Model_Player_Cards.game_id == game_id)
+        cards = card_session.query(Model_Card).\
+            filter(Model_Card.player_id == self.ID).\
+            filter(Model_Card.card_type == deck_type).\
+            filter(Model_Card.game_id == game_id)
 
         for card in cards:
             print("card.player", card.player)
@@ -175,11 +141,15 @@ class Player:
             raise ValueError('tried to load game without setting a player ID.')
         card_session = common_db.Common_DB().common_Session()
 
+ 
+
         player = card_session.query(Model_Player).\
-                options(subqueryload(Model_Player.holds_cards)).\
-                filter(Model_Player_Cards.game_id == game_id).\
                 filter(Model_Player.player_id == self.ID).\
                 one_or_none()
+
+        cards = card_session.query(Model_Card).\
+                filter(Model_Card.game_id == game_id).\
+                filter(Model_Card.player_id == self.ID)
 
         self.__db_object = player
         print("self.__db_object", self.__db_object)

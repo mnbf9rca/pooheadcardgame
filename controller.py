@@ -8,10 +8,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 import common_db
+from models import Base, Model_Card, Model_Game, Model_Player, Model_Player_Game
 from cards import Card, Card_Types, Deck
 from game import Game, get_users_for_game
 from player import Model_Player, Player, get_player_for_username
-from sql import SQL
 
 
  
@@ -35,13 +35,18 @@ def do_save_game(game, database_connection):
     game.save(database_connection)
     return True
 
-def do_load_game(game_id, this_player_id, database_connection):
+def do_load_game(game_id, this_player_id):
     """loads a game object"""
+
+    c = common_db.Common_DB()
+
     print(f"Starting to load game for ID '{game_id}'")
     game = Game()
     game.state.game_id = game_id
     game.state.this_player_id = this_player_id
-    players = get_users_for_game(game_id, database_connection)
+
+
+    players = get_users_for_game(game_id)
     print("players identified: " + str(players))
     game.players = []
     for player in players:
@@ -50,13 +55,13 @@ def do_load_game(game_id, this_player_id, database_connection):
             game.this_player = p
         game.players.append(p)
 
-    game.load(database_connection)
+    game.load()
     print(f"Load complete for game {game_id}")
 
     return game
 
 
-def do_add_to_game(game, database_connection):
+def do_add_to_game(game):
     """attempts to add user to game"""
     if not game:
         raise ValueError("Tried to do_add_to_game without game")

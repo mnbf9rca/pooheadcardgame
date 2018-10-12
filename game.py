@@ -9,13 +9,15 @@ from sqlalchemy.ext.declarative import declarative_base
 
 
 from cards import Card, Card_Types, Deck
+from models import Model_Card, Model_Game, Model_Player, Model_Player_Game
 from player import Player
+import common_db
 
 Base = declarative_base()
 
 
-
 class Game(object):
+    __underlying_db_object = None
     PILE_BURN = 1
     PILE_PICK = 2
     PILE_PLAYED = 3
@@ -70,6 +72,7 @@ class Game(object):
     }
 
     def __init__(self, this_player_id=None, number_of_players=0):
+        self.__underlying_db_object = None
         self.state = self.State(number_of_players)
         self.cards = self.Cards()
         self.state.this_player_id = this_player_id
@@ -301,54 +304,54 @@ class Game(object):
         if not self.state.game_id:
             querystring = "INSERT INTO games (game_finished, players_requested, game_ready_to_start, game_checksum, players_finished, play_on_anything_cards, play_order, less_than_card, transparent_card, burn_card, reset_card, number_of_decks, number_face_down_cards, number_hand_cards, current_turn_number, players_ready_to_start, deal_done) VALUES (:game_finished, :number_of_players_requested, :game_ready_to_start, :game_checksum, :players_finished, :play_on_anything_cards,:play_order,:less_than_card,:transparent_card,:burn_card,:reset_card,:number_of_decks,:number_face_down_cards,:number_hand_cards,:current_turn_number,:players_ready_to_start, :deal_done)"
             result = database_connection.execute(querystring,
-                                                trans_connection=trans_connection,
-                                                game_finished=self.state.game_finished,
-                                                number_of_players_requested=self.state.number_of_players_requested,
-                                                game_ready_to_start=self.ready_to_start,
-                                                game_checksum=self.checksum(),
-                                                players_finished=json.dumps(
-                                                    self.state.players_finished),
-                                                play_on_anything_cards=json.dumps(
-                                                    self.state.play_on_anything_cards),
-                                                play_order=json.dumps(
-                                                    self.state.play_order),
-                                                less_than_card=self.state.less_than_card,
-                                                transparent_card=self.state.transparent_card,
-                                                burn_card=self.state.burn_card,
-                                                reset_card=self.state.reset_card,
-                                                number_of_decks=self.state.number_of_decks,
-                                                number_face_down_cards=self.state.number_face_down_cards,
-                                                number_hand_cards=self.state.number_hand_cards,
-                                                current_turn_number=self.state.current_turn_number,
-                                                players_ready_to_start=json.dumps(
-                                                    self.state.players_ready_to_start),
-                                                deal_done=self.state.deal_done)
+                                                 trans_connection=trans_connection,
+                                                 game_finished=self.state.game_finished,
+                                                 number_of_players_requested=self.state.number_of_players_requested,
+                                                 game_ready_to_start=self.ready_to_start,
+                                                 game_checksum=self.checksum(),
+                                                 players_finished=json.dumps(
+                                                     self.state.players_finished),
+                                                 play_on_anything_cards=json.dumps(
+                                                     self.state.play_on_anything_cards),
+                                                 play_order=json.dumps(
+                                                     self.state.play_order),
+                                                 less_than_card=self.state.less_than_card,
+                                                 transparent_card=self.state.transparent_card,
+                                                 burn_card=self.state.burn_card,
+                                                 reset_card=self.state.reset_card,
+                                                 number_of_decks=self.state.number_of_decks,
+                                                 number_face_down_cards=self.state.number_face_down_cards,
+                                                 number_hand_cards=self.state.number_hand_cards,
+                                                 current_turn_number=self.state.current_turn_number,
+                                                 players_ready_to_start=json.dumps(
+                                                     self.state.players_ready_to_start),
+                                                 deal_done=self.state.deal_done)
         else:
             querystring = "UPDATE games SET game_finished = :game_finished, players_requested = :number_of_players_requested, game_ready_to_start = :game_ready_to_start, game_checksum = :game_checksum, players_finished = :players_finished, play_on_anything_cards = :play_on_anything_cards, play_order = :play_order, less_than_card = :less_than_card, transparent_card = :transparent_card, burn_card = :burn_card, reset_card = :reset_card, number_of_decks = :number_of_decks, number_face_down_cards = :number_face_down_cards ,number_hand_cards = :number_hand_cards,current_turn_number = :current_turn_number, players_ready_to_start = :players_ready_to_start, deal_done = :deal_done WHERE gameid = :game_id"
             result = database_connection.execute(querystring,
-                                                trans_connection=trans_connection,
-                                                game_finished=self.state.game_finished,
-                                                number_of_players_requested=self.state.number_of_players_requested,
-                                                game_ready_to_start=self.ready_to_start,
-                                                game_checksum=self.checksum(),
-                                                players_finished=json.dumps(
-                                                    self.state.players_finished),
-                                                play_on_anything_cards=json.dumps(
-                                                    self.state.play_on_anything_cards),
-                                                play_order=json.dumps(
-                                                    self.state.play_order),
-                                                less_than_card=self.state.less_than_card,
-                                                transparent_card=self.state.transparent_card,
-                                                burn_card=self.state.burn_card,
-                                                reset_card=self.state.reset_card,
-                                                number_of_decks=self.state.number_of_decks,
-                                                number_face_down_cards=self.state.number_face_down_cards,
-                                                number_hand_cards=self.state.number_hand_cards,
-                                                current_turn_number=self.state.current_turn_number,
-                                                players_ready_to_start=json.dumps(
-                                                    self.state.players_ready_to_start),
-                                                deal_done=self.state.deal_done,
-                                                game_id=self.state.game_id)
+                                                 trans_connection=trans_connection,
+                                                 game_finished=self.state.game_finished,
+                                                 number_of_players_requested=self.state.number_of_players_requested,
+                                                 game_ready_to_start=self.ready_to_start,
+                                                 game_checksum=self.checksum(),
+                                                 players_finished=json.dumps(
+                                                     self.state.players_finished),
+                                                 play_on_anything_cards=json.dumps(
+                                                     self.state.play_on_anything_cards),
+                                                 play_order=json.dumps(
+                                                     self.state.play_order),
+                                                 less_than_card=self.state.less_than_card,
+                                                 transparent_card=self.state.transparent_card,
+                                                 burn_card=self.state.burn_card,
+                                                 reset_card=self.state.reset_card,
+                                                 number_of_decks=self.state.number_of_decks,
+                                                 number_face_down_cards=self.state.number_face_down_cards,
+                                                 number_hand_cards=self.state.number_hand_cards,
+                                                 current_turn_number=self.state.current_turn_number,
+                                                 players_ready_to_start=json.dumps(
+                                                     self.state.players_ready_to_start),
+                                                 deal_done=self.state.deal_done,
+                                                 game_id=self.state.game_id)
 
         print("returned from trans_connection.execute")
         if not result:
@@ -415,55 +418,66 @@ class Game(object):
         self.state.last_player = last_player
         self.state.play_order.append(last_player)
 
-    def load(self, database_connection):
+    def load(self):
         """loads the configuration of the game defined by state.game_id"""
         if not self.state.game_id:
             raise ValueError('tried to load game without setting game_id.')
-        if not len(self.players) > 0:
-            raise ValueError('tried to load game without setting player IDs.')
         if not self.state.this_player_id:
             raise ValueError(
                 'tried to load game without setting ID of current player or it doesnt exist in current instantiation.')
 
         # load game config
         # fields not retrieved: `last_move_at`, `gameid`,`checksum`,`game_ready_to_start`
-        config = database_connection.execute("SELECT game_finished, players_requested, players_finished, play_on_anything_cards, play_order, less_than_card,transparent_card,burn_card,reset_card,number_of_decks,number_face_down_cards,number_hand_cards,current_turn_number,last_player, players_ready_to_start, deal_done FROM games WHERE gameid = :game_id",
-                                             game_id=self.state.game_id)
-        print("config loaded:", jsonpickle.dumps(config, unpicklable=False))
-        config = config[0]
-        self.state.game_finished = config["game_finished"]
-        self.state.number_of_players_requested = int(
-            config["players_requested"])
-        self.state.players_finished = json.loads(config["players_finished"])
+        s = common_db.Common_DB().common_Session()
+
+        g = s.query(Model_Game).\
+            filter(Model_Game.gameid == self.state.game_id).\
+            one_or_none()
+
+        if not g:
+            raise ValueError(
+                f"cannot find game with ID '{self.state.game_id}'")
+        self.__underlying_db_object = g
+
+        print("config loaded:", g)
+
+        self.state.game_finished = g.game_finished
+        self.state.number_of_players_requested = g.players_requested
+        self.state.players_finished = json.loads(g.players_finished)
         self.state.play_on_anything_cards = json.loads(
-            config["play_on_anything_cards"])
-        self.state.play_order = json.loads(config["play_order"])
-        self.state.less_than_card = int(config["less_than_card"])
-        self.state.transparent_card = int(config["transparent_card"])
-        self.state.burn_card = int(config["burn_card"])
-        self.state.reset_card = int(config["reset_card"])
-        self.state.number_of_decks = int(config["number_of_decks"])
-        self.state.number_face_down_cards = int(
-            config["number_face_down_cards"])
-        self.state.number_hand_cards = int(config["number_hand_cards"])
-        self.state.current_turn_number = int(config["current_turn_number"])
+            g.play_on_anything_cards)
+        self.state.play_order = json.loads(g.play_order)
+        self.state.less_than_card = g.less_than_card
+        self.state.transparent_card = g.ransparent_card
+        self.state.burn_card = g.burn_card
+        self.state.reset_card = g.reset_card
+        self.state.number_of_decks = g.number_of_decks
+        self.state.number_face_down_cards = g.number_face_down_cards
+        self.state.number_hand_cards = g.number_hand_cards
+        self.state.current_turn_number = g.current_turn_number
         self.state.players_ready_to_start = json.loads(
-            config["players_ready_to_start"])
-        self.state.deal_done = config["deal_done"]
+            g.players_ready_to_start)
+        self.state.deal_done = g.deal_done
 
         # load decks
-        self.cards.pile_deck = self.__load_cards_from_database(
-            Game.PILE_DECK, self.state.game_id, database_connection)
-        self.cards.pile_burn = self.__load_cards_from_database(
-            Game.PILE_BURN, self.state.game_id, database_connection)
-        self.cards.pile_played = self.__load_cards_from_database(
-            Game.PILE_PLAYED, self.state.game_id, database_connection)
-        self.cards.pile_pick = self.__load_cards_from_database(
-            Game.PILE_PICK, self.state.game_id, database_connection)
+
+        self.cards.pile_burn = [Card(card.card_suit, card.card_rank) for card in s.query(Model_Card).
+                                filter(Model_Game.gameid == self.state.game_id).
+                                filter(Model_Card.card_location == Card_Types.CARD_BURN_PILE).
+                                order_by(Model_Card.card_sequence.asc())]
+        self.cards.pile_played = [Card(card.card_suit, card.card_rank) for card in s.query(Model_Card).
+                                  filter(Model_Game.gameid == self.state.game_id).
+                                  filter(Model_Card.card_location == Card_Types.CARD_PLAYED_PILE).
+                                  order_by(Model_Card.card_sequence.asc())]
+        self.cards.pile_deck = [Card(card.card_suit, card.card_rank) for card in s.query(Model_Card).
+                                filter(Model_Game.gameid == self.state.game_id).
+                                filter(Model_Card.card_location == Card_Types.CARD_DECK).
+                                order_by(Model_Card.card_sequence.asc())]
+
         self.__update_pile_sizes()
 
         for player in self.players:
-            player.load(database_connection, self.state.game_id)
+            player.load(self.state.game_id)
             # store a reference to this player's object on the game itself
             if player.ID == self.state.this_player_id:
                 self.this_player = player
@@ -491,9 +505,12 @@ class Game(object):
         """
         response = {"allowed_action": "unknown", "allowed_players": "unknown"}
         all_player_id = set([player.ID for player in self.players])
-        players_still_to_swap = (list(all_player_id - set(self.state.players_ready_to_start)))
-        players_still_not_finished = (list(all_player_id - set(self.state.players_finished)))
-        print("set(self.state.players_ready_to_start)", set(self.state.players_ready_to_start),"set(self.state.players_finished)",set(self.state.players_finished), "all_player_id", all_player_id, "players_still_to_swap", players_still_to_swap, "players_still_not_finished", players_still_not_finished)
+        players_still_to_swap = (
+            list(all_player_id - set(self.state.players_ready_to_start)))
+        players_still_not_finished = (
+            list(all_player_id - set(self.state.players_finished)))
+        print("set(self.state.players_ready_to_start)", set(self.state.players_ready_to_start), "set(self.state.players_finished)", set(self.state.players_finished),
+              "all_player_id", all_player_id, "players_still_to_swap", players_still_to_swap, "players_still_not_finished", players_still_not_finished)
         if len(players_still_to_swap) > 0:
             # still some players not yet ready to start --> must be swapping
             if self.state.this_player_id in players_still_to_swap:
@@ -510,12 +527,12 @@ class Game(object):
             response = {"allowed_action": "finished",
                         "action-message": "Game over"}
             self.state.game_finished = True
-        elif (self.this_player.ID in players_still_not_finished and 
+        elif (self.this_player.ID in players_still_not_finished and
               len(players_still_not_finished) == 1):
             # you;re the last player
             response = {"allowed_action": "lost",
                         "action-message": "You lost!"}
-        elif self.this_player.ID in self.state.players_finished :
+        elif self.this_player.ID in self.state.players_finished:
             # this player finished, others havent
             response = {"allowed_action": "wait",
                         "action-message": "You've finished - but others are still playing. Please wait.",
@@ -526,7 +543,7 @@ class Game(object):
             # and everyone has swapped
             # so must be in game play
             # check if we're next or have to wait
-            
+
             is_next_player = self.this_player.ID == self.state.play_order[0]
             if is_next_player:
                 # can we actually play or do we have to pick up?
@@ -584,7 +601,7 @@ class Game(object):
         for player in self.players:
             this_player_lowest_rank = min([card.rank for card in player.hand])
             if (this_player_lowest_rank < lowest_rank and
-                this_player_lowest_rank not in self.state.get_all_special_cards()):
+                    this_player_lowest_rank not in self.state.get_all_special_cards()):
                 lowest_player = player.ID
                 lowest_rank = this_player_lowest_rank
 
@@ -935,9 +952,9 @@ class Game(object):
         return True
 
 
-def get_users_for_game(game_id, database_connection):
+def get_users_for_game(game_id):
     """load the list of users playing a game"""
-    players = database_connection.execute("SELECT player_id FROM player_game WHERE game_id = :game_id",
+    players = common_db.Common_DB.execute("SELECT player_id FROM player_game WHERE game_id = :game_id",
                                           game_id=game_id)
     list_of_players = []
     if len(players) > 0:
@@ -945,15 +962,16 @@ def get_users_for_game(game_id, database_connection):
     return list_of_players
 
 
-def get_list_of_games_looking_for_players(player_id, database_connection):
+def get_list_of_games_looking_for_players(player_id):
     """find all the games that this player is waiting to start"""
     sql = "SELECT games.gameid, player_counts.number_of_players, games.game_ready_to_start, games.game_finished, games.players_requested FROM games LEFT JOIN (SELECT player_game.game_id as game_id, count(player_game.player_id) as number_of_players FROM player_game group by player_game.game_id) as player_counts ON games.gameid = player_counts.game_id LEFT JOIN (select game_id from player_game where player_id = :player_id) AS games_to_exclude on games_to_exclude.game_id = games.gameid where games_to_exclude.game_id IS NULL"
-    games = database_connection.execute(
+    c = common_db.Common_DB().execute
+    games = c(
         sql, player_id=player_id)
     return games
 
 
-def get_list_of_games_for_this_user(player_id, database_connection, include_only_unready=False, include_finished=True):
+def get_list_of_games_for_this_user(player_id, include_only_unready=False, include_finished=True):
     """find all the games that this player is waiting to start"""
 
     sql = "SELECT games.gameid, player_counts.number_of_players, games.game_ready_to_start, games.game_finished, games.players_requested FROM games join (select player_game.game_id from player_game where player_game.player_id = :player_id) as games_for_this_player on games.gameid = games_for_this_player.game_id LEFT JOIN (SELECT player_game.game_id as game_id, count(player_game.player_id) as number_of_players FROM player_game group by player_game.game_id) as player_counts ON games.gameid = player_counts.game_id"
@@ -967,7 +985,7 @@ def get_list_of_games_for_this_user(player_id, database_connection, include_only
 
     if conditionals:
         sql = " WHERE ".join([sql, " AND ".join(conditionals)])
-
-    games = database_connection.execute(
+    c = common_db.Common_DB()
+    games = c.execute(
         sql, player_id=player_id)
     return games
