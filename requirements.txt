@@ -3,6 +3,7 @@ Flask-Session==0.3.1
 Flask-Sessionstore==0.4.5
 Flask-SSLify==0.1.5
 gunicorn==19.9.0
+ItsDangerous==0.24
 jsonpickle==0.9.6
 psycopg2-binary==2.7.5
 requests==2.19.1
