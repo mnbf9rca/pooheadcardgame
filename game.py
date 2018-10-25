@@ -2,9 +2,12 @@ import json
 from random import shuffle
 from zlib import crc32
 from typing import List
+from enum import Enum
+from collections import namedtuple
+import sys
 
 import jsonpickle
-from sqlalchemy.orm import sessionmaker
+
 from sqlalchemy.ext.declarative import declarative_base
 
 
@@ -18,23 +21,28 @@ Base = declarative_base()
 
 class Game(object):
     __underlying_db_object = None
+
     PILE_BURN = 1
     PILE_PICK = 2
     PILE_PLAYED = 3
     PILE_DECK = 4
 
+    class Card_Pile_ID(Enum):
+            PILE_BURN = 1
+            PILE_PICK = 2
+            PILE_PLAYED = 3
+            PILE_DECK = 4  
+    
     Pile_Objects = {
-        PILE_DECK: "self.cards.deck",
-        PILE_PICK: "self.cards.pick_stack",
-        PILE_PLAYED: "self.cards.played_cards",
-        PILE_BURN: "self.cards.burn_pile"
-    }
-
+        Card_Pile_ID.PILE_DECK: "pile_deck",
+        Card_Pile_ID.PILE_PICK :"pile_pick",
+        Card_Pile_ID.PILE_PLAYED : "pile_played",
+        Card_Pile_ID.PILE_BURN : "pile_burn"}
     Pile_Counts = {
-        PILE_DECK: "self.state.pile_deck_size",
-        PILE_PICK: "self.state.pile_pick_size",
-        PILE_PLAYED: "self.cards.pile_played_size",
-        PILE_BURN: "self.cards.pile_burn_size"
+        Card_Pile_ID.PILE_DECK: "pile_deck_size",
+        Card_Pile_ID.PILE_PICK: "pile_pick_size",
+        Card_Pile_ID.PILE_PLAYED: "pile_played_size",
+        Card_Pile_ID.PILE_BURN: "pile_burn_size"
     }
 
     game_properties = {
@@ -80,6 +88,7 @@ class Game(object):
         if this_player_id:
             self.players.append(Player(this_player_id))
 
+        
     def add_players_to_game(self, player_id, database_connection):
         """Checks if there's enough space left in this game, and
            that this player is not already in the list,
@@ -291,20 +300,17 @@ class Game(object):
         self.__update_pile_sizes()
         self.state.deal_done = True
 
-    def save(self, database_connection):
+    def save(self, session):
         """saves the current state of the game, using a transaction to ensure
            that we can roll back if not successful. If this is a new game
            without an ID, it creates one, otherwise it updates the existing one"""
         print("beginning game save")
-
-        Session = sessionmaker(bind=database_connection.engine)
-        trans_connection = Session()
+        c = common_db.Common_DB()
 
         print("started transaction")
         if not self.state.game_id:
             querystring = "INSERT INTO games (game_finished, players_requested, game_ready_to_start, game_checksum, players_finished, play_on_anything_cards, play_order, less_than_card, transparent_card, burn_card, reset_card, number_of_decks, number_face_down_cards, number_hand_cards, current_turn_number, players_ready_to_start, deal_done) VALUES (:game_finished, :number_of_players_requested, :game_ready_to_start, :game_checksum, :players_finished, :play_on_anything_cards,:play_order,:less_than_card,:transparent_card,:burn_card,:reset_card,:number_of_decks,:number_face_down_cards,:number_hand_cards,:current_turn_number,:players_ready_to_start, :deal_done)"
-            result = database_connection.execute(querystring,
-                                                 trans_connection=trans_connection,
+            result = c.execute(session, querystring,
                                                  game_finished=self.state.game_finished,
                                                  number_of_players_requested=self.state.number_of_players_requested,
                                                  game_ready_to_start=self.ready_to_start,
@@ -328,8 +334,7 @@ class Game(object):
                                                  deal_done=self.state.deal_done)
         else:
             querystring = "UPDATE games SET game_finished = :game_finished, players_requested = :number_of_players_requested, game_ready_to_start = :game_ready_to_start, game_checksum = :game_checksum, players_finished = :players_finished, play_on_anything_cards = :play_on_anything_cards, play_order = :play_order, less_than_card = :less_than_card, transparent_card = :transparent_card, burn_card = :burn_card, reset_card = :reset_card, number_of_decks = :number_of_decks, number_face_down_cards = :number_face_down_cards ,number_hand_cards = :number_hand_cards,current_turn_number = :current_turn_number, players_ready_to_start = :players_ready_to_start, deal_done = :deal_done WHERE gameid = :game_id"
-            result = database_connection.execute(querystring,
-                                                 trans_connection=trans_connection,
+            result = c.execute(session, querystring,
                                                  game_finished=self.state.game_finished,
                                                  number_of_players_requested=self.state.number_of_players_requested,
                                                  game_ready_to_start=self.ready_to_start,
@@ -353,64 +358,48 @@ class Game(object):
                                                  deal_done=self.state.deal_done,
                                                  game_id=self.state.game_id)
 
-        print("returned from trans_connection.execute")
         if not result:
-            print("no result in trans_connection.execute - rolling back")
-            trans_connection.rollback()
-            trans_connection.close()
-            return None
+            print("unable to save core game state")
+            return False, "unable to save core game state"
 
         if not(self.state.game_id):
             self.state.game_id = int(result)
+        
+        result = c.execute(session, f"DELETE FROM game_cards WHERE game_id = {self.state.game_id} and player_id is null;")
+        if result == None:
+            # some kind of exception
+            print("unable to delete existing game cards")
+            return False, "unable to delete existing game cards - rolling back"
 
-        if not self.__persist_cards_to_database(deck=self.cards.pile_deck,
-                                                deck_type=str(Game.PILE_DECK),
-                                                game_id=str(
-                                                    self.state.game_id),
-                                                database_connection=database_connection,
-                                                trans_connection=trans_connection):
-            trans_connection.rollback()
-            trans_connection.close()
-            raise ValueError('error persisting Game.PILE_DECK to database')
-        if not self.__persist_cards_to_database(deck=self.cards.pile_burn,
-                                                deck_type=str(Game.PILE_BURN),
-                                                game_id=str(
-                                                    self.state.game_id),
-                                                database_connection=database_connection,
-                                                trans_connection=trans_connection):
-            trans_connection.rollback()
-            trans_connection.close()
-            raise ValueError('error persisting Game.PILE_BURN to database')
-        if not self.__persist_cards_to_database(deck=self.cards.pile_played,
-                                                deck_type=Game.PILE_PLAYED,
-                                                game_id=self.state.game_id,
-                                                database_connection=database_connection,
-                                                trans_connection=trans_connection):
-            trans_connection.rollback()
-            trans_connection.close()
-            raise ValueError('error persisting Game.PILE_PLAYED to database')
-        if not self.__persist_cards_to_database(deck=self.cards.pile_pick,
-                                                deck_type=str(Game.PILE_PICK),
-                                                game_id=str(
-                                                    self.state.game_id),
-                                                database_connection=database_connection,
-                                                trans_connection=trans_connection):
-            trans_connection.rollback()
-            trans_connection.close()
-            raise ValueError('error persisting Game.PILE_PICK to database')
+        cards_to_store = []
+        print("self.cards.pile_deck", self.cards.pile_deck)
+        for pile_id in self.Card_Pile_ID:
+            # iterate through each pile ID
+            # append the list of cards 
+            print("pile_id", pile_id)
+            relevant_pile = getattr(self.cards, self.Pile_Objects[pile_id])
+            print("relevant_pile", relevant_pile)
+            for card in relevant_pile:
+                cards_to_store.append(f"({self.state.game_id}, {None}, {pile_id}, {card.suit}, {card.rank})")
+        
+        if cards_to_store:
+            cards_to_store = ", ".join(cards_to_store)
+            result = c.execute(session, f"INSERT INTO game_cards (game_id, player_id, card_location, card_suit, card_rank) VALUES {cards_to_store};")
+            if not result:
+                print("failed to save game cards, rolling back")
+                return False, "unable to save game cards"
 
         for player in self.players:
             print("saving player:", jsonpickle.dumps(player, unpicklable=True))
-            player.save(database_connection, self.state.game_id,
-                        trans_connection=trans_connection)
+            save_result, message = player.save(session, self.state.game_id)
+            if not save_result:
+                print(message)
+                return False, message
             # store a reference to this player's object on the game itself
             if player.ID == self.state.this_player_id:
                 self.this_player = player
-
-        trans_connection.commit()
-        trans_connection.close()
         # return the game_id for future use
-        return self.state.game_id
+        return True, "game saved successfully"
 
     def rotate_player(self):
         """rotates the play list once a player has played"""
@@ -418,7 +407,7 @@ class Game(object):
         self.state.last_player = last_player
         self.state.play_order.append(last_player)
 
-    def load(self):
+    def load(self, session):
         """loads the configuration of the game defined by state.game_id"""
         if not self.state.game_id:
             raise ValueError('tried to load game without setting game_id.')
@@ -428,51 +417,36 @@ class Game(object):
 
         # load game config
         # fields not retrieved: `last_move_at`, `gameid`,`checksum`,`game_ready_to_start`
-        s = common_db.Common_DB().common_Session()
+        c = common_db.Common_DB()
 
-        g = s.query(Model_Game).\
-            filter(Model_Game.gameid == self.state.game_id).\
-            one_or_none()
-
-        if not g:
-            raise ValueError(
-                f"cannot find game with ID '{self.state.game_id}'")
-        self.__underlying_db_object = g
-
-        print("config loaded:", g)
-
-        self.state.game_finished = g.game_finished
-        self.state.number_of_players_requested = g.players_requested
-        self.state.players_finished = json.loads(g.players_finished)
+        config = c.execute(session, 'SELECT "game_finished", "players_requested", "players_finished", "play_on_anything_cards", "play_order", "less_than_card","transparent_card","burn_card","reset_card","number_of_decks","number_face_down_cards","number_hand_cards","current_turn_number","last_player", "players_ready_to_start", "deal_done" FROM games WHERE gameid = :game_id',
+                                             game_id=self.state.game_id)
+        config = config[0]
+        print("config loaded from db", jsonpickle.dumps(config, unpicklable=False))
+        self.state.game_finished = config["game_finished"]
+        self.state.number_of_players_requested = config["players_requested"]
+        self.state.players_finished = json.loads(config["players_finished"])
         self.state.play_on_anything_cards = json.loads(
-            g.play_on_anything_cards)
-        self.state.play_order = json.loads(g.play_order)
-        self.state.less_than_card = g.less_than_card
-        self.state.transparent_card = g.ransparent_card
-        self.state.burn_card = g.burn_card
-        self.state.reset_card = g.reset_card
-        self.state.number_of_decks = g.number_of_decks
-        self.state.number_face_down_cards = g.number_face_down_cards
-        self.state.number_hand_cards = g.number_hand_cards
-        self.state.current_turn_number = g.current_turn_number
+            config["play_on_anything_cards"])
+        self.state.play_order = json.loads(config["play_order"])
+        self.state.less_than_card = config["less_than_card"]
+        self.state.transparent_card = config["transparent_card"]
+        self.state.burn_card = config["burn_card"]
+        self.state.reset_card = config["reset_card"]
+        self.state.number_of_decks = config["number_of_decks"]
+        self.state.number_face_down_cards = config["number_face_down_cards"]
+        self.state.number_hand_cards = config["number_hand_cards"]
+        self.state.current_turn_number = config["current_turn_number"]
         self.state.players_ready_to_start = json.loads(
-            g.players_ready_to_start)
-        self.state.deal_done = g.deal_done
+            config["players_ready_to_start"])
+        self.state.deal_done = config["deal_done"]
+
 
         # load decks
+        for pile_id in self.Card_Pile_ID:
+            relevant_pile = getattr(self.cards, self.Pile_Objects[pile_id])
+            relevant_pile = self.__load_cards_from_database(pile_id.value, self.state.game_id, session)
 
-        self.cards.pile_burn = [Card(card.card_suit, card.card_rank) for card in s.query(Model_Card).
-                                filter(Model_Game.gameid == self.state.game_id).
-                                filter(Model_Card.card_location == Card_Types.CARD_BURN_PILE).
-                                order_by(Model_Card.card_sequence.asc())]
-        self.cards.pile_played = [Card(card.card_suit, card.card_rank) for card in s.query(Model_Card).
-                                  filter(Model_Game.gameid == self.state.game_id).
-                                  filter(Model_Card.card_location == Card_Types.CARD_PLAYED_PILE).
-                                  order_by(Model_Card.card_sequence.asc())]
-        self.cards.pile_deck = [Card(card.card_suit, card.card_rank) for card in s.query(Model_Card).
-                                filter(Model_Game.gameid == self.state.game_id).
-                                filter(Model_Card.card_location == Card_Types.CARD_DECK).
-                                order_by(Model_Card.card_sequence.asc())]
 
         self.__update_pile_sizes()
 
@@ -484,11 +458,19 @@ class Game(object):
 
     def __update_pile_sizes(self):
         """updates the summary count of each pile size, and copies the played pile to the active state"""
+        for pile_id in self.Card_Pile_ID:
+            relevant_pile = getattr(self.cards, self.Pile_Objects[pile_id])
+            pile_size = getattr(self.state, self.Pile_Counts[pile_id])
+            pile_size = len(relevant_pile)
+
+        ''' REMOVED
         self.state.pile_pick_size = len(self.cards.pile_pick)
         self.state.pile_played_size = len(self.cards.pile_played)
         self.state.pile_burn_size = len(self.cards.pile_burn)
         self.state.pile_deck_size = len(self.cards.pile_deck)
+        '''
         self.state.play_list = self.cards.pile_played
+        
 
     def calculate_player_allowed_actions(self):
         """calculates what action, if any, the current player is allowed to perform
@@ -918,43 +900,50 @@ class Game(object):
         print("swap response", jsonpickle.dumps(response, unpicklable=False))
         return response
 
-    def __load_cards_from_database(self, deck_type, game_id, database_connection):
+    def __load_cards_from_database(self, deck_type, game_id, session):
         """load a set of cards and return them in a sorted list"""
-        cards = database_connection.execute("SELECT card_suit, card_rank FROM game_cards WHERE game_id = :game_id AND card_location = :deck_type ORDER BY card_sequence ASC",
+        c = common_db.Common_DB()
+        print("deck_type", deck_type, "game_id", game_id)
+        cards = c.execute(session, "SELECT card_suit, card_rank FROM game_cards WHERE game_id = :game_id AND card_location = :deck_type",
                                             game_id=game_id, deck_type=deck_type)
         cards_to_return = []
         if len(cards) > 0:
+            print(f"found {len(cards)} cards")
             cards_to_return.extend(
                 [Card(card["card_suit"], card["card_rank"]) for card in cards])
         return cards_to_return
 
-    def __persist_cards_to_database(self, deck=[], *args, deck_type, game_id, database_connection, trans_connection=None):
+    '''
+    moved to game.save (for now)
+    def __persist_cards_to_database(self, deck=[], *args, deck_type, game_id, session):
         """persist a set of cards to the database as part of game state"""
         # first, clear all cards of this type for this game
-        result = database_connection.execute("DELETE FROM game_cards WHERE card_location=:card_type AND game_id = :game_id;",
-                                             trans_connection=trans_connection,
-                                             card_type=int(deck_type),
-                                             game_id=int(game_id))
-        cards = []
-        i = 0
-        for card in deck:
-            cards.append(
-                f"({game_id}, {deck_type}, {card.suit}, {card.rank}, {i})")
-            i += 1
-        if cards:
-            cards = ", ".join(cards)
-            result = database_connection.execute(
-                "INSERT INTO game_cards (game_id, card_location, card_suit, card_rank, card_sequence) VALUES " + cards + ";", trans_connection=trans_connection)
-            if not result:
-                print("result", result)
-                return False
+
+        for location in self.Card_Piles:
+            result = session.execute("DELETE FROM game_cards WHERE card_location=:card_type AND game_id = :game_id;",
+                                                card_type=location,
+                                                game_id=int(game_id))
+            cards = []
+            i = 0
+            for card in getattr(self, self.Card_Piles.Pile_Objects[location]):
+                cards.append(
+                    f"({game_id}, {location}, {card.suit}, {card.rank}, {i})")
+                i += 1
+            if cards:
+                cards = ", ".join(cards)
+                result = session.execute(
+                    "INSERT INTO game_cards (game_id, card_location, card_suit, card_rank, card_sequence) VALUES " + cards + ";",)
+                if not result:
+                    print("result", result)
+                    return False
         print("finsihed - return true")
         return True
+    '''
 
-
-def get_users_for_game(game_id):
+def get_users_for_game(game_id, session):
     """load the list of users playing a game"""
-    players = common_db.Common_DB.execute("SELECT player_id FROM player_game WHERE game_id = :game_id",
+    c = common_db.Common_DB()
+    players = c.execute(session, "SELECT player_id FROM player_game WHERE game_id = :game_id",
                                           game_id=game_id)
     list_of_players = []
     if len(players) > 0:
@@ -965,8 +954,8 @@ def get_users_for_game(game_id):
 def get_list_of_games_looking_for_players(player_id):
     """find all the games that this player is waiting to start"""
     sql = "SELECT games.gameid, player_counts.number_of_players, games.game_ready_to_start, games.game_finished, games.players_requested FROM games LEFT JOIN (SELECT player_game.game_id as game_id, count(player_game.player_id) as number_of_players FROM player_game group by player_game.game_id) as player_counts ON games.gameid = player_counts.game_id LEFT JOIN (select game_id from player_game where player_id = :player_id) AS games_to_exclude on games_to_exclude.game_id = games.gameid where games_to_exclude.game_id IS NULL"
-    c = common_db.Common_DB().execute
-    games = c(
+    c = common_db.Common_DB()
+    games = c.execute(c.common_engine,
         sql, player_id=player_id)
     return games
 
@@ -975,7 +964,7 @@ def get_list_of_games_for_this_user(player_id, include_only_unready=False, inclu
     """find all the games that this player is waiting to start"""
 
     sql = "SELECT games.gameid, player_counts.number_of_players, games.game_ready_to_start, games.game_finished, games.players_requested FROM games join (select player_game.game_id from player_game where player_game.player_id = :player_id) as games_for_this_player on games.gameid = games_for_this_player.game_id LEFT JOIN (SELECT player_game.game_id as game_id, count(player_game.player_id) as number_of_players FROM player_game group by player_game.game_id) as player_counts ON games.gameid = player_counts.game_id"
-
+    
     conditionals = []
     if include_only_unready:
         conditionals.append(
@@ -986,6 +975,6 @@ def get_list_of_games_for_this_user(player_id, include_only_unready=False, inclu
     if conditionals:
         sql = " WHERE ".join([sql, " AND ".join(conditionals)])
     c = common_db.Common_DB()
-    games = c.execute(
+    games = c.execute(c.common_engine,
         sql, player_id=player_id)
     return games

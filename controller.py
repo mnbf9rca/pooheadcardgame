@@ -31,14 +31,16 @@ def do_login(username, password):
         return found_user.player_id, found_user.is_admin
 
 
-def do_save_game(game, database_connection):
-    game.save(database_connection)
+def do_save_game(game):
+    
+    game.save()
     return True
 
 def do_load_game(game_id, this_player_id):
     """loads a game object"""
-
     c = common_db.Common_DB()
+    this_session = c.common_Sessionmaker()
+
 
     print(f"Starting to load game for ID '{game_id}'")
     game = Game()
@@ -46,8 +48,8 @@ def do_load_game(game_id, this_player_id):
     game.state.this_player_id = this_player_id
 
 
-    players = get_users_for_game(game_id)
-    print("players identified: " + str(players))
+    players = get_users_for_game(game_id, this_session)
+    print(f"players identified: {players}")
     game.players = []
     for player in players:
         p = Player(player)
@@ -55,8 +57,10 @@ def do_load_game(game_id, this_player_id):
             game.this_player = p
         game.players.append(p)
 
-    game.load()
+    game.load(this_session)
     print(f"Load complete for game {game_id}")
+    if this_session:
+        this_session.close()
 
     return game
 
@@ -100,20 +104,31 @@ def __do_deal_if_game_ready(game, dabase_connection):
         return False
 
 
-def do_start_new_game(request_json, this_player_user_id, database_connection):
+def do_start_new_game(request_json, this_player_user_id):
     """starts a new game"""
     game = Game(this_player_user_id)
     print("initiated a game")
     parsed_values, message = game.parse_requested_config(request_json)
     if parsed_values:
-        game_id = game.save(database_connection)
-        msg = quote_plus(
+        # initalise a session
+        c = common_db.Common_DB()
+        this_session = c.common_Sessionmaker()
+        result, message = game.save(this_session)
+        if not result:
+            this_session.rollback()
+            response = {"startnewgame": False,
+                "message": message}
+        else:
+            this_session.commit()
+            msg = quote_plus(
             f"Game created successfully with ID {game.state.game_id}. Now let's wait for some other players to join.")
-        print("msg", msg)
-        response = {"startnewgame": True,
-                    "new_game_id": game_id,
-                    "message": message,
-                    "redirect_querystring": f"?msg={msg}"}
+            print("msg", msg)
+            response = {"startnewgame": True,
+                        "new_game_id": game.state.game_id,
+                        "message": message,
+                        "redirect_querystring": f"?msg={msg}"}
+        this_session.close()
+        
         return response, game
     else:
         response = {"startnewgame": False,
@@ -121,7 +136,7 @@ def do_start_new_game(request_json, this_player_user_id, database_connection):
         return response, None
 
 
-def do_playcards(request_json, game, database_connection):
+def do_playcards(request_json, game):
     """validates that a user is allowed to play a specific action
     and if so, executes that action and returns the result"""
     # first, let's get the action and respond with a failure if we can't.
@@ -136,7 +151,7 @@ def do_playcards(request_json, game, database_connection):
     cards = request_json.get("action_cards")
 
     # at least we've got a candidate action - let's reload the game state from teh database
-    game.load(database_connection)
+    game.load()
 
     if action == "swap":
         if not cards:
@@ -172,13 +187,13 @@ def do_playcards(request_json, game, database_connection):
     if response["action_result"]:
         # if any of the items above report success, save state
         print("about to save game from /playcards")
-        game.save(database_connection)
+        game.save()
         print("saved game")
 
     return response
 
 
-def get_game_state(game, database_connection):
+def get_game_state(game):
     """calculates the game state that a given player is allowed
     to see (e.g. they can see their own hand cards, but not)
     the hand cards of other players) and returns it"""
@@ -190,17 +205,17 @@ def get_game_state(game, database_connection):
             "Tried to get game state but dont know current player")
 
     # always reload in case other users have caused a state change
-    game.load(database_connection)
+    game.load()
     game_state = {'active-game': True,
                 "state": game.state}
     # calculate the allowed moves at this stage of teh game for this player
     allowed_moves = game.calculate_player_allowed_actions()
 
-    if allowed_moves["allowed_action"] == "lost":
+    #if allowed_moves["allowed_action"] == "lost":
         # TODO move this to GAME at some point
         # this will only just have been computed. Save.
-        game.state.players_finished.append(game.this_player.ID)
-        game.save(database_connection)
+    #    game.state.players_finished.append(game.this_player.ID)
+    #    game.save()
 
     # Construct an object which represents the parts of the game that we want to expose to users
     players_state = []

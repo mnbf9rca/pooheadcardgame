@@ -43,6 +43,8 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 
 c = common_db.Common_DB()
+print(c.common_engine)
+c.initialise_models()
 
 sqalchemy_database_uri = c.sqalchemy_database_uri
 secret_key = c.secret_key
@@ -294,18 +296,21 @@ def register():
             return apology("passwords must match", 400)
 
         # Query database for username
-        c = common_db.Common_DB.exeute
-        rows = c("SELECT player_id, hash FROM users WHERE username = :username",
+        c = common_db.Common_DB()
+        rows = c.execute(c.common_engine, "SELECT player_id, hash FROM users WHERE username = :username",
                           username=request.form.get("username"))
 
         if len(rows) != 0:
             return apology("username already taken, sorry")
-
-        result = c("INSERT INTO users (username, hash) VALUES (:username, :password_hash)",
+        this_session = c.common_Sessionmaker()
+        result = c.execute(this_session, "INSERT INTO users (username, hash) VALUES (:username, :password_hash)",
                           username=request.form.get("username").lower(), password_hash=generate_password_hash(request.form.get("password")))
         if not result:
+            this_session.rollback()
+            this_session.close()
             return apology("could not register")
-
+        this_session.commit()
+        this_session.close()
 
         # Redirect user to home page
         return redirect(url_for('login'))

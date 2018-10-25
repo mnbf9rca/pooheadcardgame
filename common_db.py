@@ -37,7 +37,7 @@ class Common_DB():
 
     class __Controller():
         __common_engine = None
-        __common_Session = None
+        __common_Sessionmaker = None
         __sqalchemy_database_uri = None
         __secret_key = None
         def __init__(self):
@@ -46,10 +46,12 @@ class Common_DB():
             properties:
             engine --> return an sqlalchemy.engine.Engine
             sqalchemy_database_uri --> string --> URI of the connected DB
-            common_Session --> returns a sqlalchemy.orm.session.Session --> used for session management.
+            common_Sessionmaker --> returns a sqlalchemy.orm.session.sessionmaker --> used for session management.
             secret_key --> string --> secret key from metadata store
             """
+            
             in_gcp, dburi, sk = get_sql_username_password()
+
             self.__sqalchemy_database_uri = dburi
             self.__secret_key = sk
             # self.__execution_only, self.__common_engine = database_connection.get_database_connection(self.__sqalchemy_database_uri)
@@ -65,37 +67,116 @@ class Common_DB():
             try:
                 self.logger.disabled = True
                 self.__common_engine.execute("SELECT 1")
+
             except sqlalchemy.exc.OperationalError as e:
                 e = RuntimeError(self.__common_engine._parse(e))
                 e.__cause__ = None
                 raise e
             else:
                 self.logger.disabled = disabled
-            self.__common_Session = sessionmaker(bind = self.__common_engine)
-    
-        def __get_common_Session(self):
-            return self.__common_Session
-        common_Session = property(__get_common_Session)
+            self.__common_Sessionmaker = sessionmaker(bind = self.__common_engine)
+
+        @property
+        def common_Sessionmaker(self):
+            """returns a sqlalchemy.orm.session.Session"""
+            return self.__common_Sessionmaker
+        #common_Session = property(__get_common_Session, doc="returns a sqlalchemy.orm.session.Session")
         
-        
-        def __get_sqalchemy_database_uri(self):
+        @property
+        def sqalchemy_database_uri(self):
             return self.__sqalchemy_database_uri
-        sqalchemy_database_uri = property(__get_sqalchemy_database_uri)
+        #sqalchemy_database_uri = property(__get_sqalchemy_database_uri)
 
-        def __get_common_engine(self):
+        @property
+        def common_engine(self):
             return self.__common_engine
-        engine = property(__get_common_engine)
+        #engine = property(__get_common_engine)
 
-        def __get_secret_key(self):
+        @property
+        def secret_key(self):
             return self.__secret_key
-        secret_key = property(__get_secret_key)
+        #secret_key = property(__get_secret_key)
 
+        
         def initialise_models(self):
+            """Initialises models in the DB using sqlalchemy.schema.MetaData.create_all()"""
             models.Base.metadata.create_all(self.__common_engine)
 
-        def execute(self, text, **params):
+        def execute(self, engine_or_session, text, **params):
             """
             Execute a SQL statement.
+            modified from https://github.com/cs50/python-cs50
+            """
+            print("text", text)
+
+            # Raise exceptions for warnings
+            warnings.filterwarnings("error")
+
+            # Prepare, execute statement
+            try:
+
+                statement = self.__parse_sql_statement(text = text, **params)
+
+                # Statement for logging
+                log = re.sub(r"\n\s*", " ", sqlparse.format(statement, reindent=True))
+
+                # Execute statement
+                print(f"Attempting to execute regular query: {statement}")
+                result = engine_or_session.execute(statement)
+                
+                # If SELECT (or INSERT with RETURNING), return result set as list of dict objects
+                if re.search(r"^\s*SELECT", statement, re.I):
+
+                    # Coerce any decimal.Decimal objects to float objects
+                    # https://groups.google.com/d/msg/sqlalchemy/0qXMYJvq8SA/oqtvMD9Uw-kJ
+                    rows = [dict(row) for row in result.fetchall()]
+                    for row in rows:
+                        for column in row:
+                            if isinstance(row[column], decimal.Decimal):
+                                row[column] = float(row[column])
+                    ret = rows
+
+                # If INSERT, return primary key value for a newly inserted row
+                elif re.search(r"^\s*INSERT", statement, re.I):
+                    if self.__common_engine.url.get_backend_name() in ["postgres", "postgresql"]:
+                        result = engine_or_session.execute(sqlalchemy.text("SELECT LASTVAL()"))
+                        ret = result.first()[0]
+                    else:
+                        ret = result.lastrowid
+                    if (ret == 0):
+                        # no row ID generated
+                        # but if there's an exception, that's overridden below
+                        # so let's just return True
+                        ret = True
+
+                # If DELETE or UPDATE, return number of rows matched
+                elif re.search(r"^\s*(?:DELETE|UPDATE)", statement, re.I):
+                    ret = result.rowcount
+
+                # If some other statement, return True unless exception
+                else:
+                    ret = True
+
+            # If constraint violated, return None
+            except sqlalchemy.exc.IntegrityError:
+                self.logger.debug(termcolor.colored(log, "yellow"))
+                return None
+
+            # If user errror
+            except sqlalchemy.exc.OperationalError as e:
+                self.logger.debug(termcolor.colored(log, "red"))
+                e = RuntimeError(self._parse(e))
+                e.__cause__ = None
+                raise e
+
+            # Return value
+            else:
+                self.logger.debug(termcolor.colored(log, "green"))
+                return ret
+        
+        def sessexecute(self, session, text, **params):
+            """
+            Execute a SQL statement with a session.
             from https://github.com/cs50/python-cs50
             """
             print("text", text)
@@ -113,7 +194,7 @@ class Common_DB():
 
                 # Execute statement
                 print(f"Attempting to execute regular query: {statement}")
-                result = self.engine.execute(statement)
+                result = session.execute(statement)
                 
                 # If SELECT (or INSERT with RETURNING), return result set as list of dict objects
                 if re.search(r"^\s*SELECT", statement, re.I):
@@ -129,8 +210,8 @@ class Common_DB():
 
                 # If INSERT, return primary key value for a newly inserted row
                 elif re.search(r"^\s*INSERT", statement, re.I):
-                    if self.engine.url.get_backend_name() in ["postgres", "postgresql"]:
-                        result = self.engine.execute(sqlalchemy.text("SELECT LASTVAL()"))
+                    if self.__common_engine.url.get_backend_name() in ["postgres", "postgresql"]:
+                        result = session.execute(sqlalchemy.text("SELECT LASTVAL()"))
                         ret = result.first()[0]
                     else:
                         ret = result.lastrowid
@@ -207,9 +288,10 @@ class Common_DB():
                         elif isinstance(value, int):
                             return sqlalchemy.types.Integer().literal_processor(dialect)(value)
 
-                        # long
-                        elif sys.version_info.major != 3 and isinstance(value, long):
-                            return sqlalchemy.types.Integer().literal_processor(dialect)(value)
+                        # long - modified to use int instead of long in py3 so i dont need this
+                        # - see https://docs.python.org/3.3/whatsnew/3.0.html#integers
+                        # elif sys.version_info.major != 3 and isinstance(value, long):
+                        #    return sqlalchemy.types.Integer().literal_processor(dialect)(value)
 
                         # str
                         elif isinstance(value, str):
@@ -233,7 +315,7 @@ class Common_DB():
             # SQLite does not support executing many statements
             # https://docs.python.org/3/library/sqlite3.html#sqlite3.Cursor.execute
             if (len(sqlparse.split(text)) > 1 and
-                self.engine.url.get_backend_name() == "sqlite"):
+                self.__common_engine.url.get_backend_name() == "sqlite"):
                 raise RuntimeError("too many statements at once")
 
             # Raise exceptions for warnings
@@ -254,7 +336,7 @@ class Common_DB():
                     if value is None:
                         value = sqlalchemy.sql.null()
 
-                    if self.engine.url.get_backend_name() == "sqlite":
+                    if self.__common_engine.url.get_backend_name() == "sqlite":
                         # for some reason, bool isnt being converted to int
                         if value == True:
                             value = 1
