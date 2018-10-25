@@ -89,7 +89,7 @@ class Game(object):
             self.players.append(Player(this_player_id))
 
         
-    def add_players_to_game(self, player_id, database_connection):
+    def add_players_to_game(self, player_id, session):
         """Checks if there's enough space left in this game, and
            that this player is not already in the list,
            adds the selected player ID"""
@@ -102,7 +102,7 @@ class Game(object):
             self.players.append(player_to_add)
             self.state.number_of_players_joined = len(self.players)
             self.state.play_order = [player.ID for player in self.players]
-            self.save(database_connection)
+            self.save(session)
 
             return True
         else:
@@ -267,9 +267,10 @@ class Game(object):
             self.pile_played = []
             self.pile_deck = []
 
-    def get_database_checksum(self, database_connection):
+    def get_database_checksum(self):
         """loads the 'checksum' field from teh database for the current game and returns it"""
-        config = database_connection.execute('SELECT game_checksum FROM games WHERE gameid = :game_id',
+        c = common_db.Common_DB()
+        config = c.execute(c.common_engine,'SELECT game_checksum FROM games WHERE gameid = :game_id',
                                              game_id=self.state.game_id)
         database_checksum = config[0]["game_checksum"]
         return database_checksum
@@ -294,7 +295,12 @@ class Game(object):
             for player in self.players:
                 player.face_down.append(new_deck.deal())
                 player.face_up.append(new_deck.deal())
+        for _ in range(self.state.number_hand_cards):
+            for player in self.players:
                 player.hand.append(new_deck.deal())
+        
+        for player in self.players:
+            print("face_down", len(player.face_down), "face_up", len(player.face_up), "hand", len(player.hand))
 
         self.cards.pile_deck = new_deck.cards
         self.__update_pile_sizes()
@@ -380,7 +386,7 @@ class Game(object):
             relevant_pile = getattr(self.cards, self.Pile_Objects[pile_id])
             print("relevant_pile", relevant_pile)
             for card in relevant_pile:
-                cards_to_store.append(f"({self.state.game_id}, {None}, {pile_id}, {card.suit}, {card.rank})")
+                cards_to_store.append(f"({self.state.game_id}, NULL, {pile_id.value}, {card.suit}, {card.rank})")
         
         if cards_to_store:
             cards_to_store = ", ".join(cards_to_store)
@@ -444,31 +450,24 @@ class Game(object):
 
         # load decks
         for pile_id in self.Card_Pile_ID:
-            relevant_pile = getattr(self.cards, self.Pile_Objects[pile_id])
-            relevant_pile = self.__load_cards_from_database(pile_id.value, self.state.game_id, session)
+            setattr(self.cards, self.Pile_Objects[pile_id], self.__load_cards_from_database(pile_id.value, self.state.game_id, session))
 
 
         self.__update_pile_sizes()
 
         for player in self.players:
-            player.load(self.state.game_id)
+            if not player.load(session, self.state.game_id):
+                return False
             # store a reference to this player's object on the game itself
             if player.ID == self.state.this_player_id:
                 self.this_player = player
+        return True
 
     def __update_pile_sizes(self):
         """updates the summary count of each pile size, and copies the played pile to the active state"""
         for pile_id in self.Card_Pile_ID:
-            relevant_pile = getattr(self.cards, self.Pile_Objects[pile_id])
-            pile_size = getattr(self.state, self.Pile_Counts[pile_id])
-            pile_size = len(relevant_pile)
+            setattr(self.state, self.Pile_Counts[pile_id], len(getattr(self.cards, self.Pile_Objects[pile_id])))
 
-        ''' REMOVED
-        self.state.pile_pick_size = len(self.cards.pile_pick)
-        self.state.pile_played_size = len(self.cards.pile_played)
-        self.state.pile_burn_size = len(self.cards.pile_burn)
-        self.state.pile_deck_size = len(self.cards.pile_deck)
-        '''
         self.state.play_list = self.cards.pile_played
         
 
@@ -912,33 +911,6 @@ class Game(object):
             cards_to_return.extend(
                 [Card(card["card_suit"], card["card_rank"]) for card in cards])
         return cards_to_return
-
-    '''
-    moved to game.save (for now)
-    def __persist_cards_to_database(self, deck=[], *args, deck_type, game_id, session):
-        """persist a set of cards to the database as part of game state"""
-        # first, clear all cards of this type for this game
-
-        for location in self.Card_Piles:
-            result = session.execute("DELETE FROM game_cards WHERE card_location=:card_type AND game_id = :game_id;",
-                                                card_type=location,
-                                                game_id=int(game_id))
-            cards = []
-            i = 0
-            for card in getattr(self, self.Card_Piles.Pile_Objects[location]):
-                cards.append(
-                    f"({game_id}, {location}, {card.suit}, {card.rank}, {i})")
-                i += 1
-            if cards:
-                cards = ", ".join(cards)
-                result = session.execute(
-                    "INSERT INTO game_cards (game_id, card_location, card_suit, card_rank, card_sequence) VALUES " + cards + ";",)
-                if not result:
-                    print("result", result)
-                    return False
-        print("finsihed - return true")
-        return True
-    '''
 
 def get_users_for_game(game_id, session):
     """load the list of users playing a game"""

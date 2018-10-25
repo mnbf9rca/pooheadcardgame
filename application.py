@@ -225,7 +225,7 @@ def play():
     else:
         # take game from session
         game = session["game"]
-        game.load()
+        controller.do_reload_game(game)
         return render_template("play.html")
 
 @app.route("/login", methods=["GET", "POST"])

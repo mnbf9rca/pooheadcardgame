@@ -1,7 +1,8 @@
 from sqlalchemy import (TIMESTAMP, Boolean, Column, ForeignKey, Integer,
-                        String, Sequence)
+                        String, Sequence, UniqueConstraint)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, subqueryload
+from sqlalchemy.sql.expression import false as sql_false
 
 Base = declarative_base()
 
@@ -12,15 +13,17 @@ class Model_Player(Base):
     last_played_at = Column(TIMESTAMP(timezone=False))
     hash = Column(String)
     username = Column(String)
-    is_admin = Column(Boolean)
+    is_admin = Column(Boolean, server_default=sql_false())
 
     def __repr__(self):
         return f"<User(id='{self.player_id}', username='{self.username}' name='{self.player_name}', last_played_at='{self.last_played_at}', is_admin='{self.is_admin}')>"
 
 class Model_Player_Game(Base):
     __tablename__ = 'player_game'
-    player_id = Column(Integer, primary_key=True)
-    game_id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True)
+    player_id = Column(Integer)
+    game_id = Column(Integer)
+    __table_args__ = (UniqueConstraint('player_id', 'game_id', name='uix_player_game'),)
 
     def __repr__(self):
         return f"<Player ID: {self.player_id} is in game {self.game_id}>"
@@ -33,7 +36,6 @@ class Model_Card(Base):
     card_location = Column(Integer)
     card_suit = Column(Integer)
     card_rank = Column(Integer)
-    card_sequence = Column(Integer)
     belongs_to_game = relationship("Model_Game", back_populates='game_cards')
 
     def __repr__(self):

@@ -107,8 +107,6 @@ class Common_DB():
             Execute a SQL statement.
             modified from https://github.com/cs50/python-cs50
             """
-            print("text", text)
-
             # Raise exceptions for warnings
             warnings.filterwarnings("error")
 
@@ -121,7 +119,6 @@ class Common_DB():
                 log = re.sub(r"\n\s*", " ", sqlparse.format(statement, reindent=True))
 
                 # Execute statement
-                print(f"Attempting to execute regular query: {statement}")
                 result = engine_or_session.execute(statement)
                 
                 # If SELECT (or INSERT with RETURNING), return result set as list of dict objects
@@ -173,14 +170,12 @@ class Common_DB():
             else:
                 self.logger.debug(termcolor.colored(log, "green"))
                 return ret
-        
+        ''' REMOVED
         def sessexecute(self, session, text, **params):
             """
             Execute a SQL statement with a session.
             from https://github.com/cs50/python-cs50
             """
-            print("text", text)
-
             # Raise exceptions for warnings
             warnings.filterwarnings("error")
 
@@ -193,7 +188,6 @@ class Common_DB():
                 log = re.sub(r"\n\s*", " ", sqlparse.format(statement, reindent=True))
 
                 # Execute statement
-                print(f"Attempting to execute regular query: {statement}")
                 result = session.execute(statement)
                 
                 # If SELECT (or INSERT with RETURNING), return result set as list of dict objects
@@ -245,7 +239,7 @@ class Common_DB():
             else:
                 self.logger.debug(termcolor.colored(log, "green"))
                 return ret
-
+        '''
         def __parse_sql_statement(self, text, **params):
             """
             Parse and bind paramaters to create a SQL statement.

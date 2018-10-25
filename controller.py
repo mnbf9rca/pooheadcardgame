@@ -32,9 +32,22 @@ def do_login(username, password):
 
 
 def do_save_game(game):
-    
-    game.save()
-    return True
+    c = common_db.Common_DB()
+    s = c.common_Sessionmaker()
+    if game.save(s):
+        s.commit()
+        s.close()
+        return True
+    else:
+        s.rollback()
+        s.close()
+        return False
+
+def do_reload_game(game):
+    c = common_db.Common_DB()
+    s = c.common_Sessionmaker()
+    game.load(s)
+    s.close()
 
 def do_load_game(game_id, this_player_id):
     """loads a game object"""
@@ -57,7 +70,10 @@ def do_load_game(game_id, this_player_id):
             game.this_player = p
         game.players.append(p)
 
-    game.load(this_session)
+    if not game.load(this_session):
+        this_session.rollback()
+    else:
+        this_session.commit()
     print(f"Load complete for game {game_id}")
     if this_session:
         this_session.close()
@@ -71,38 +87,30 @@ def do_add_to_game(game):
         raise ValueError("Tried to do_add_to_game without game")
     # looking to add themselves to this game
     # check whether this is allowed.
-    if not game.add_players_to_game(game.state.this_player_id, database_connection):
+    c = common_db.Common_DB()
+    this_session = c.common_Sessionmaker()
+
+    if not game.add_players_to_game(game.state.this_player_id, this_session):
+        this_session.rollback()
         message = "could not add you to the game"
         action_result = False
-
-    elif __do_deal_if_game_ready(game, database_connection):
-        action_result = True
-        message = "Added you to the game, and it's ready to play."
     else:
+        #added to the game. Check if the game is ready
+        if game.ready_to_start:
+            # do the deal
+            if not game.state.deal_done:
+                game.deal()
+                game.save(this_session)
+            message = "Added you to the game, and it's ready to play."
+        else:
+            message = "Added you to the game. Now sit tight and wait for enough other players to join."
         action_result = True
-        message = "Added you to the game. Now sit tight and wait for enough other players to join."
-
+        this_session.commit()
+    this_session.close()
     response = {"action": "add",
                 "action_result": action_result,
                 "message": message}
     return response
-
-
-def __do_deal_if_game_ready(game, dabase_connection):
-    """checks if the game is ready to start and if this player is in
-    the players list"""
-    if not game:
-        raise ValueError("Tried to __do_deal_if_game_ready without game")
-    if (game.ready_to_start and
-            (game.state.this_player_id in (p.ID for p in game.players))):
-        # game is ready to start, and this player is in the players list
-        if not game.state.deal_done:
-            game.deal()
-            game.save(dabase_connection)
-        return True
-    else:
-        return False
-
 
 def do_start_new_game(request_json, this_player_user_id):
     """starts a new game"""
@@ -151,7 +159,9 @@ def do_playcards(request_json, game):
     cards = request_json.get("action_cards")
 
     # at least we've got a candidate action - let's reload the game state from teh database
-    game.load()
+    c = common_db.Common_DB()
+    s = c.common_Sessionmaker()
+    game.load(s)
 
     if action == "swap":
         if not cards:
@@ -187,9 +197,13 @@ def do_playcards(request_json, game):
     if response["action_result"]:
         # if any of the items above report success, save state
         print("about to save game from /playcards")
-        game.save()
+        game.save(s)
+        s.commit()
         print("saved game")
-
+    else:
+        s.rollback()
+    if s:
+        s.close()
     return response
 
 
@@ -205,7 +219,8 @@ def get_game_state(game):
             "Tried to get game state but dont know current player")
 
     # always reload in case other users have caused a state change
-    game.load()
+
+    do_reload_game(game)
     game_state = {'active-game': True,
                 "state": game.state}
     # calculate the allowed moves at this stage of teh game for this player

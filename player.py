@@ -112,32 +112,25 @@ class Player:
         print(f"done persisting cards for game_id '{game_id}' and player_id '{self.ID}' and card_type '{deck_type}''")
         return
 
-    def load_player_cards_orm(self, card_session, game_id, deck_type):
-        print("about to use ORM to load cards for player ID " + str(self.ID) +
-              " for game " + str(game_id) + " with type " + str(deck_type) + ".")
+    def load_player_cards(self, session, game_id, deck_type):
+        """queries the database for a set of cards for a given player and game and type ande returns as a set"""
+        print("about to load cards for player ID " + str(self.ID) + " for game " + str(game_id) + " with type " + str(deck_type) + ".")
+        c = common_db.Common_DB()
 
-        
-        cards = card_session.query(Model_Card).\
-            filter(Model_Card.player_id == self.ID).\
-            filter(Model_Card.card_type == deck_type).\
-            filter(Model_Card.game_id == game_id)
-
-        for card in cards:
-            print("card.player", card.player)
-
+        cards = c.execute(session,"SELECT card_suit, card_rank FROM game_cards WHERE player_id = :player_id AND card_location = :card_type AND game_id = :game_id ORDER BY card_rank, card_suit ASC",
+                                            player_id = self.ID,
+                                            card_type = deck_type,
+                                            game_id = game_id)
         cards_to_return = []
-        # if cards.count() > 0:
-        cards_to_return.extend(
-            [Card(card.card_suit, card.card_rank) for card in cards])
-        print("returning " + str(len(cards_to_return)) + ' cards')
-
-        
+        if len(cards) > 0:
+            cards_to_return.extend([Card(card["card_suit"],card["card_rank"]) for card in cards])
+        print("returning " + str(len(cards_to_return)))
         return cards_to_return
 
     def save(self, session, game_id):
         """saves the current player's gamew state, including registering this player as playing this game"""
         c = common_db.Common_DB()
-        result = c.execute(session, 'INSERT INTO player_game (player_id, game_id) VALUES (:user_id, :game_id) ON CONFLICT (player_id, game_id) DO NOTHING;',
+        result = c.execute(session, 'INSERT INTO player_game (player_id, game_id) VALUES (:user_id, :game_id) ON CONFLICT (player_id, game_id) DO UPDATE SET player_id = :user_id, game_id = :game_id;',
                     user_id= self.ID,
                     game_id = game_id)
         if not result:
@@ -153,7 +146,7 @@ class Player:
         cards_to_store = []
         for pile_id in self.Card_Pile_ID:
                 for card in getattr(self, self.Pile_Objects[pile_id]):
-                    cards_to_store.append(f"({game_id}, {self.ID}, {pile_id}, {card.suit}, {card.rank})")
+                    cards_to_store.append(f"({game_id}, {self.ID}, {pile_id.value}, {card.suit}, {card.rank})")
 
         if cards_to_store:
             cards_to_store = ", ".join(cards_to_store)
@@ -165,35 +158,14 @@ class Player:
 
         return True, f"player {self.ID} saved successfully"
 
-    def load(self, database_connection, game_id):
+    def load(self, session, game_id):
         """loads the cards for each card type for the current player"""
         if not self.ID:
             raise ValueError('tried to load game without setting a player ID.')
-        card_session = common_db.Common_DB().common_Sessionmaker()
+        for pile_id in self.Card_Pile_ID:
+            setattr(self, self.Pile_Objects[pile_id], self.load_player_cards(session, game_id, pile_id.value))
 
- 
-
-        player = card_session.query(Model_Player).\
-                filter(Model_Player.player_id == self.ID).\
-                one_or_none()
-
-        cards = card_session.query(Model_Card).\
-                filter(Model_Card.game_id == game_id).\
-                filter(Model_Card.player_id == self.ID)
-
-        self.__db_object = player
-        print("self.__db_object", self.__db_object)
-
-
-        print("loading cards...")
-        self.face_down = self.load_player_cards_orm(card_session, game_id, Card_Types.CARD_FACE_DOWN)
-        print("loaded face down")
-        self.face_up = self.load_player_cards_orm(card_session, game_id, Card_Types.CARD_FACE_UP)
-        print("loaded face up")
-        self.hand = self.load_player_cards_orm(card_session, game_id, Card_Types.CARD_HAND)
-        print("loaded hand")
-        
-        return
+        return True
 
     def add_cards_to_player_cards(self, cards_to_add, card_type):
         if card_type == Card_Types.CARD_HAND:
