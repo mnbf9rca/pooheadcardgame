@@ -1,0 +1,17 @@
+to preview:
+in one window, 
+- export creds
+- run ./dont-deploy/run-gcloud-proxy.sh
+in another,
+- run ./dont-deploy/run_flaskl.sh 
+
+
+
+https://cloud.google.com/appengine/docs/flexible/python/quickstart
+
+testing localo
+
+
+grant all on all tables in schema public to mac;
+grant all on all sequences in schema public to mac;
+grant all on database poohead to mac;

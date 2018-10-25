@@ -1,38 +1,42 @@
 from random import shuffle
 
+
 class Card_Types:
     CARD_FACE_DOWN = 1
     CARD_FACE_UP = 2
     CARD_HAND = 3
     CARD_NONE = 4
-    Long_Name = {CARD_FACE_DOWN:"face down",
-                 CARD_FACE_UP:"face up",
-                 CARD_HAND:"hand",
-                 CARD_NONE:"none"}
-    Short_Name= {CARD_FACE_DOWN:"d",
-                 CARD_FACE_UP:"f",
-                 CARD_HAND:"h",
-                 CARD_NONE:"n"}
-    Get_Code =  {"d":CARD_FACE_DOWN,
-                 "f":CARD_FACE_UP,
-                 "h":CARD_HAND,
-                 "n":CARD_NONE}
-
+    CARD_BURN_PILE = 5
+    CARD_DECK = 6
+    CARD_PLAYED_PILE = 7
+    
+    Long_Name = {CARD_FACE_DOWN: "face down",
+                 CARD_FACE_UP: "face up",
+                 CARD_HAND: "hand",
+                 CARD_NONE: "none"}
+    Short_Name = {CARD_FACE_DOWN: "d",
+                  CARD_FACE_UP: "f",
+                  CARD_HAND: "h",
+                  CARD_NONE: "n"}
+    Card_Type_From_Code = {"d": CARD_FACE_DOWN,
+                           "f": CARD_FACE_UP,
+                           "h": CARD_HAND,
+                           "n": CARD_NONE}
 
     def __init__(self):
         return
 
 
+
 class Card:
     """defines a playing card"""
 
-
-    suits = {1: "hearts", 2: "diamonds", 3: "clubs", 4: "spades" }
-    suits_short = {0: "B", 1:"H", 2: "D", 3: "C", 4: "S"}
+    suits = {1: "hearts", 2: "diamonds", 3: "clubs", 4: "spades"}
+    suits_short = {0: "B", 1: "H", 2: "D", 3: "C", 4: "S"}
     ranks = {2: "two", 3: "three", 4: "four", 5: "five",
-            6: "six", 7: "seven", 8: "eight", 9: "nine",
-            10: "ten", 11: "jack", 12: "queen", 13: "king", 14: "ace"}
-    rank_short = {10:"T", 11:"J", 12:"Q", 13:"K", 14:"A"}
+             6: "six", 7: "seven", 8: "eight", 9: "nine",
+             10: "ten", 11: "jack", 12: "queen", 13: "king", 14: "ace"}
+    rank_short = {10: "T", 11: "J", 12: "Q", 13: "K", 14: "A"}
 
     def __init__(self, suit, rank):
         self.rank = rank
@@ -58,7 +62,7 @@ class Card:
 
     def __str__(self):
         """Return a description of the card name"""
-        return ((Card.ranks[self.rank]) +  ' of ' + (Card.suits[self.suit]))
+        return ((Card.ranks[self.rank]) + ' of ' + (Card.suits[self.suit]))
 
     def __lt__(self, other):
         """less than"""
@@ -69,20 +73,20 @@ class Card:
         return self.rank == other.rank and self.suit == other.suit
 
 
-
 class Deck:
     """defines a deck of playing cards.
        by default a new deck is shuffled but optionally can be empty"""
-    def __init__(self, newgame = True, number_of_decks = 1):
+
+    def __init__(self, newgame=True, number_of_decks=1):
         self.cards = []
         self.current = 0
 
         if (newgame):
             # we're asking for a newly shuffled deck for a new game
-            for i in range(number_of_decks):
-                self.cards.extend([Card(s,r) for s in Card.suits for r in Card.ranks])
+            for _ in range(number_of_decks):
+                self.cards.extend([Card(s, r)
+                                   for s in Card.suits for r in Card.ranks])
             self.shuffle()
-
 
     def shuffle(self):
         """shuffle the current deck"""
@@ -108,4 +112,3 @@ class Deck:
             card = self.cards[self.current]
             self.current += 1
             return card
-

@@ -1,7 +1,0 @@
-1. put person who played a card under the card in the played pile
-2. return a message when someone else picks up cards (so i know where the pile went)
-3. allow to start new game and wait for others, or joine existing game --> done
-4. pop up authentication window if lost session
-5. redirect on successful creation of new game --> done
-6. notify when my game is ready to join
-7. replace sqlite with ??

@@ -46,14 +46,14 @@ Play cards!
                 {{g.number_of_players}}
             </div>
             <div class="col">
-                {{g.game_finished == True }}
+                {{g.game_finished|int == True }}
             </div>
 
             <div class="col">
-                {{g.game_ready_to_start == True}}
+                {{g.game_ready_to_start|int == True}}
             </div>
             <div class="col">
-                {% if ((g.game_ready_to_start == True) and (g.game_finished == False)) %}
+                {% if ((g.game_ready_to_start|int == True) and (g.game_finished|int == False)) %}
                 <a href='{{url_for("load_game")}}?game_id={{ g.gameid }}'>Go to game --></a>
                 {% endif %}
             </div>
@@ -96,14 +96,14 @@ Play cards!
                 {{g.number_of_players}}
             </div>
             <div class="col">
-                {{g.game_finished == True }}
+                {{g.game_finished|int == True }}
             </div>
 
             <div class="col">
-                {{g.game_ready_to_start == True}}
+                {{g.game_ready_to_start|int == True}}
             </div>
             <div class="col">
-                {% if ((g.game_ready_to_start == False) and (g.game_finished == False)) %}
+                {% if ((g.game_ready_to_start|int == False) and (g.game_finished|int == False)) %}
                 <a href='{{url_for("load_game")}}?add=1&game_id={{ g.gameid }}'>Go to game --></a>
                 {% endif %}
             </div>

@@ -1,0 +1,30 @@
+runtime: python
+env: flex
+entrypoint: gunicorn -b :$PORT application:app
+
+runtime_config:
+    python_version: 3
+
+automatic_scaling:
+  min_num_instances: 1
+  max_num_instances: 2
+  cool_down_period_sec: 180
+  cpu_utilization:
+    target_utilization: 0.6
+    
+resources:
+  cpu: 1
+  memory_gb: 0.5
+  disk_size_gb: 10
+
+network:
+  name: default
+
+env_variables:
+    # mysql --> SQLALCHEMY_DATABASE_URI: >-
+    #   mysql+pymysql://<creds>@/poohead?unix_socket=/cloudsql/pooheadcardgame:europe-west1:poohead-db
+    SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://<creds>@/poohead?host=/cloudsql/pooheadcardgame:europe-west1:pooheadpstgres
+
+beta_settings:
+    # mysql --> cloud_sql_instances: pooheadcardgame:europe-west1:poohead-db
+    cloud_sql_instances: pooheadcardgame:europe-west1:pooheadpstgres

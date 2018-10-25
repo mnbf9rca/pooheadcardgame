@@ -1,29 +1,48 @@
-from cards import Card, Deck, Card_Types
-from player import Player
 import json
-import jsonpickle
-from zlib import crc32
 from random import shuffle
+from zlib import crc32
+from typing import List
+from enum import Enum
+from collections import namedtuple
+import sys
+
+import jsonpickle
+
+from sqlalchemy.ext.declarative import declarative_base
+
+
+from cards import Card, Card_Types, Deck
+from models import Model_Card, Model_Game, Model_Player, Model_Player_Game
+from player import Player
+import common_db
+
+Base = declarative_base()
 
 
 class Game(object):
+    __underlying_db_object = None
+
     PILE_BURN = 1
     PILE_PICK = 2
     PILE_PLAYED = 3
     PILE_DECK = 4
 
+    class Card_Pile_ID(Enum):
+            PILE_BURN = 1
+            PILE_PICK = 2
+            PILE_PLAYED = 3
+            PILE_DECK = 4  
+    
     Pile_Objects = {
-        PILE_DECK: "self.cards.deck",
-        PILE_PICK: "self.cards.pick_stack",
-        PILE_PLAYED: "self.cards.played_cards",
-        PILE_BURN: "self.cards.burn_pile"
-    }
-
+        Card_Pile_ID.PILE_DECK: "pile_deck",
+        Card_Pile_ID.PILE_PICK :"pile_pick",
+        Card_Pile_ID.PILE_PLAYED : "pile_played",
+        Card_Pile_ID.PILE_BURN : "pile_burn"}
     Pile_Counts = {
-        PILE_DECK: "self.state.pile_deck_size",
-        PILE_PICK: "self.state.pile_pick_size",
-        PILE_PLAYED: "self.cards.pile_played_size",
-        PILE_BURN: "self.cards.pile_burn_size"
+        Card_Pile_ID.PILE_DECK: "pile_deck_size",
+        Card_Pile_ID.PILE_PICK: "pile_pick_size",
+        Card_Pile_ID.PILE_PLAYED: "pile_played_size",
+        Card_Pile_ID.PILE_BURN: "pile_burn_size"
     }
 
     game_properties = {
@@ -60,29 +79,30 @@ class Game(object):
         "number_of_players": 2
     }
 
-    this_player = None
-
-    def __init__(self, this_player_id, number_of_players=0):
+    def __init__(self, this_player_id=None, number_of_players=0):
+        self.__underlying_db_object = None
         self.state = self.State(number_of_players)
         self.cards = self.Cards()
         self.state.this_player_id = this_player_id
-        # players - we only know of 1 at creatin
         self.players = []
-        self.players.append(Player(this_player_id))
+        if this_player_id:
+            self.players.append(Player(this_player_id))
 
-    def add_players_to_game(self, player_id, database_connection):
+        
+    def add_players_to_game(self, player_id, session):
         """Checks if there's enough space left in this game, and
            that this player is not already in the list,
            adds the selected player ID"""
 
         if (not self.ready_to_start and
-             len(list(set(player.ID for player in self.players) - set([player_id])))== len(self.players) ):
+                len(list(set(player.ID for player in self.players) - set([player_id]))) == len(self.players)):
 
             player_to_add = Player(player_id)
 
             self.players.append(player_to_add)
             self.state.number_of_players_joined = len(self.players)
-            self.save(database_connection)
+            self.state.play_order = [player.ID for player in self.players]
+            self.save(session)
 
             return True
         else:
@@ -213,6 +233,7 @@ class Game(object):
             self.players_finished = []
             self.play_on_anything_cards = [2, 10]
             self.deal_done = False
+            self.all_special_cards = []
 
             # game state
             self.current_turn_number = 0
@@ -222,6 +243,19 @@ class Game(object):
             self.pile_pick_size = 0
             self.pile_played_size = 0
             self.pile_deck_size = 0
+
+        def get_all_special_cards(self):
+            """returns all special cards"""
+            cards = []
+            cards.append(self.transparent_card)
+            cards.append(self.less_than_card)
+            cards.append(self.burn_card)
+            cards.append(self.reset_card)
+
+            while 0 in cards:
+                cards.remove(0)
+
+            return set(cards)
 
     class Cards(object):
         """stores cards separately from state to keep secret from client"""
@@ -233,11 +267,12 @@ class Game(object):
             self.pile_played = []
             self.pile_deck = []
 
-    def get_database_checksum(self, database_connection):
+    def get_database_checksum(self):
         """loads the 'checksum' field from teh database for the current game and returns it"""
-        config = database_connection.execute('SELECT "checksum" FROM games WHERE gameid = :game_id',
+        c = common_db.Common_DB()
+        config = c.execute(c.common_engine,'SELECT game_checksum FROM games WHERE gameid = :game_id',
                                              game_id=self.state.game_id)
-        database_checksum = config[0]["checksum"]
+        database_checksum = config[0]["game_checksum"]
         return database_checksum
 
     def checksum(self):
@@ -253,84 +288,124 @@ class Game(object):
         """creates a new deck of cards, deals to each player, then puts the remaining cards in the pick stack"""
         new_deck = Deck()
 
-        # although cards are shuffled and so it doesnt really matter
-        # follow convention and deal face down, then face up, then hand cards
-        for deal in range(self.state.number_face_down_cards):
+        # cards are shuffled and so it doesnt really matter that we dont
+        # follow convention and deal each player's
+        # face down, then face up, then hand cards
+        for _ in range(self.state.number_face_down_cards):
             for player in self.players:
                 player.face_down.append(new_deck.deal())
-
-        # number face down cards = number face up cards
-        for deal in range(self.state.number_face_down_cards):
-            for player in self.players:
                 player.face_up.append(new_deck.deal())
-
-        # hand cards
-        for deal in range(self.state.number_hand_cards):
+        for _ in range(self.state.number_hand_cards):
             for player in self.players:
                 player.hand.append(new_deck.deal())
+        
+        for player in self.players:
+            print("face_down", len(player.face_down), "face_up", len(player.face_up), "hand", len(player.hand))
 
         self.cards.pile_deck = new_deck.cards
         self.__update_pile_sizes()
-        self.state.play_order = list(player.ID for player in self.players)
         self.state.deal_done = True
 
-    def save(self, database_connection):
-        """saves the current state of the game. If this is a new game without an ID, it creates one, otherwise it updates the existing one"""
-        # trans = database_connection.execute("BEGIN TRANSACTION;")
+    def save(self, session):
+        """saves the current state of the game, using a transaction to ensure
+           that we can roll back if not successful. If this is a new game
+           without an ID, it creates one, otherwise it updates the existing one"""
+        print("beginning game save")
+        c = common_db.Common_DB()
+
+        print("started transaction")
         if not self.state.game_id:
-            querystring = "INSERT INTO games (game_finished, players_requested, game_ready_to_start, checksum, players_finished, play_on_anything_cards, play_order, less_than_card, transparent_card, burn_card, reset_card, number_of_decks, number_face_down_cards, number_hand_cards, current_turn_number, players_ready_to_start, deal_done, gameid) VALUES (:game_finished, :number_of_players_requested, :game_ready_to_start, :checksum, :players_finished, :play_on_anything_cards,:play_order,:less_than_card,:transparent_card,:burn_card,:reset_card,:number_of_decks,:number_face_down_cards,:number_hand_cards,:current_turn_number,:players_ready_to_start, :deal_done, :game_id)"
-
+            querystring = "INSERT INTO games (game_finished, players_requested, game_ready_to_start, game_checksum, players_finished, play_on_anything_cards, play_order, less_than_card, transparent_card, burn_card, reset_card, number_of_decks, number_face_down_cards, number_hand_cards, current_turn_number, players_ready_to_start, deal_done) VALUES (:game_finished, :number_of_players_requested, :game_ready_to_start, :game_checksum, :players_finished, :play_on_anything_cards,:play_order,:less_than_card,:transparent_card,:burn_card,:reset_card,:number_of_decks,:number_face_down_cards,:number_hand_cards,:current_turn_number,:players_ready_to_start, :deal_done)"
+            result = c.execute(session, querystring,
+                                                 game_finished=self.state.game_finished,
+                                                 number_of_players_requested=self.state.number_of_players_requested,
+                                                 game_ready_to_start=self.ready_to_start,
+                                                 game_checksum=self.checksum(),
+                                                 players_finished=json.dumps(
+                                                     self.state.players_finished),
+                                                 play_on_anything_cards=json.dumps(
+                                                     self.state.play_on_anything_cards),
+                                                 play_order=json.dumps(
+                                                     self.state.play_order),
+                                                 less_than_card=self.state.less_than_card,
+                                                 transparent_card=self.state.transparent_card,
+                                                 burn_card=self.state.burn_card,
+                                                 reset_card=self.state.reset_card,
+                                                 number_of_decks=self.state.number_of_decks,
+                                                 number_face_down_cards=self.state.number_face_down_cards,
+                                                 number_hand_cards=self.state.number_hand_cards,
+                                                 current_turn_number=self.state.current_turn_number,
+                                                 players_ready_to_start=json.dumps(
+                                                     self.state.players_ready_to_start),
+                                                 deal_done=self.state.deal_done)
         else:
-            querystring = "UPDATE games SET game_finished = :game_finished, players_requested = :number_of_players_requested, game_ready_to_start = :game_ready_to_start, checksum = :checksum, players_finished = :players_finished, play_on_anything_cards = :play_on_anything_cards, play_order = :play_order, less_than_card = :less_than_card, transparent_card = :transparent_card, burn_card = :burn_card, reset_card = :reset_card, number_of_decks = :number_of_decks, number_face_down_cards = :number_face_down_cards ,number_hand_cards = :number_hand_cards,current_turn_number = :current_turn_number, players_ready_to_start = :players_ready_to_start, deal_done = :deal_done WHERE gameid = :game_id"
-        print("self.ready_to_start", self.ready_to_start, self.ready_to_start==True)
-        result = database_connection.execute(querystring,
-                                             game_finished=self.state.game_finished,
-                                             number_of_players_requested=self.state.number_of_players_requested,
-                                             game_ready_to_start = self.ready_to_start,
-                                             checksum=self.checksum(),
-                                             players_finished=json.dumps(self.state.players_finished),
-                                             play_on_anything_cards=json.dumps(self.state.play_on_anything_cards),
-                                             play_order=json.dumps(self.state.play_order),
-                                             less_than_card=self.state.less_than_card,
-                                             transparent_card=self.state.transparent_card,
-                                             burn_card=self.state.burn_card,
-                                             reset_card=self.state.reset_card,
-                                             number_of_decks=self.state.number_of_decks,
-                                             number_face_down_cards=self.state.number_face_down_cards,
-                                             number_hand_cards=self.state.number_hand_cards,
-                                             current_turn_number=self.state.current_turn_number,
-                                             players_ready_to_start=json.dumps(self.state.players_ready_to_start),
-                                             deal_done = self.state.deal_done,
-                                             game_id=self.state.game_id)
+            querystring = "UPDATE games SET game_finished = :game_finished, players_requested = :number_of_players_requested, game_ready_to_start = :game_ready_to_start, game_checksum = :game_checksum, players_finished = :players_finished, play_on_anything_cards = :play_on_anything_cards, play_order = :play_order, less_than_card = :less_than_card, transparent_card = :transparent_card, burn_card = :burn_card, reset_card = :reset_card, number_of_decks = :number_of_decks, number_face_down_cards = :number_face_down_cards ,number_hand_cards = :number_hand_cards,current_turn_number = :current_turn_number, players_ready_to_start = :players_ready_to_start, deal_done = :deal_done WHERE gameid = :game_id"
+            result = c.execute(session, querystring,
+                                                 game_finished=self.state.game_finished,
+                                                 number_of_players_requested=self.state.number_of_players_requested,
+                                                 game_ready_to_start=self.ready_to_start,
+                                                 game_checksum=self.checksum(),
+                                                 players_finished=json.dumps(
+                                                     self.state.players_finished),
+                                                 play_on_anything_cards=json.dumps(
+                                                     self.state.play_on_anything_cards),
+                                                 play_order=json.dumps(
+                                                     self.state.play_order),
+                                                 less_than_card=self.state.less_than_card,
+                                                 transparent_card=self.state.transparent_card,
+                                                 burn_card=self.state.burn_card,
+                                                 reset_card=self.state.reset_card,
+                                                 number_of_decks=self.state.number_of_decks,
+                                                 number_face_down_cards=self.state.number_face_down_cards,
+                                                 number_hand_cards=self.state.number_hand_cards,
+                                                 current_turn_number=self.state.current_turn_number,
+                                                 players_ready_to_start=json.dumps(
+                                                     self.state.players_ready_to_start),
+                                                 deal_done=self.state.deal_done,
+                                                 game_id=self.state.game_id)
 
-       # if not result:
-            #database_connection.execute("ROLLBACK")
+        if not result:
+            print("unable to save core game state")
+            return False, "unable to save core game state"
+
         if not(self.state.game_id):
-            self.state.game_id = result
+            self.state.game_id = int(result)
+        
+        result = c.execute(session, f"DELETE FROM game_cards WHERE game_id = {self.state.game_id} and player_id is null;")
+        if result == None:
+            # some kind of exception
+            print("unable to delete existing game cards")
+            return False, "unable to delete existing game cards - rolling back"
 
-        if not self.__persist_cards_to_database(deck=self.cards.pile_deck, deck_type=str(Game.PILE_DECK), game_id=str(self.state.game_id), database_connection=database_connection):
-            #database_connection.execute("ROLLBACK")
-            raise ValueError('error persisting Game.PILE_DECK to database')
-        if not self.__persist_cards_to_database(deck=self.cards.pile_burn, deck_type=str(Game.PILE_BURN), game_id=str(self.state.game_id), database_connection=database_connection):
-            #database_connection.execute("ROLLBACK")
-            raise ValueError('error persisting Game.PILE_BURN to database')
-        if not self.__persist_cards_to_database(deck=self.cards.pile_played, deck_type=str(Game.PILE_PLAYED), game_id=str(self.state.game_id), database_connection=database_connection):
-            #database_connection.execute("ROLLBACK")
-            raise ValueError('error persisting Game.PILE_PLAYED to database')
-        if not self.__persist_cards_to_database(deck=self.cards.pile_pick, deck_type=str(Game.PILE_PICK), game_id=str(self.state.game_id), database_connection=database_connection):
-            #database_connection.execute("ROLLBACK")
-            raise ValueError('error persisting Game.PILE_PICK to database')
+        cards_to_store = []
+        print("self.cards.pile_deck", self.cards.pile_deck)
+        for pile_id in self.Card_Pile_ID:
+            # iterate through each pile ID
+            # append the list of cards 
+            print("pile_id", pile_id)
+            relevant_pile = getattr(self.cards, self.Pile_Objects[pile_id])
+            print("relevant_pile", relevant_pile)
+            for card in relevant_pile:
+                cards_to_store.append(f"({self.state.game_id}, NULL, {pile_id.value}, {card.suit}, {card.rank})")
+        
+        if cards_to_store:
+            cards_to_store = ", ".join(cards_to_store)
+            result = c.execute(session, f"INSERT INTO game_cards (game_id, player_id, card_location, card_suit, card_rank) VALUES {cards_to_store};")
+            if not result:
+                print("failed to save game cards, rolling back")
+                return False, "unable to save game cards"
 
         for player in self.players:
             print("saving player:", jsonpickle.dumps(player, unpicklable=True))
-            player.save(database_connection, self.state.game_id)
+            save_result, message = player.save(session, self.state.game_id)
+            if not save_result:
+                print(message)
+                return False, message
             # store a reference to this player's object on the game itself
             if player.ID == self.state.this_player_id:
                 self.this_player = player
-
-        #database_connection.execute("COMMIT")
         # return the game_id for future use
-        return self.state.game_id
+        return True, "game saved successfully"
 
     def rotate_player(self):
         """rotates the play list once a player has played"""
@@ -338,21 +413,22 @@ class Game(object):
         self.state.last_player = last_player
         self.state.play_order.append(last_player)
 
-    def load(self, database_connection):
+    def load(self, session):
         """loads the configuration of the game defined by state.game_id"""
         if not self.state.game_id:
             raise ValueError('tried to load game without setting game_id.')
-        if not len(self.players) > 0:
-            raise ValueError('tried to load game without setting player IDs.')
         if not self.state.this_player_id:
             raise ValueError(
                 'tried to load game without setting ID of current player or it doesnt exist in current instantiation.')
 
         # load game config
         # fields not retrieved: `last_move_at`, `gameid`,`checksum`,`game_ready_to_start`
-        config = database_connection.execute('SELECT "game_finished", "players_requested", "players_finished", "play_on_anything_cards", "play_order", "less_than_card","transparent_card","burn_card","reset_card","number_of_decks","number_face_down_cards","number_hand_cards","current_turn_number","last_player", "players_ready_to_start", "deal_done" FROM games WHERE gameid = :game_id',
+        c = common_db.Common_DB()
+
+        config = c.execute(session, 'SELECT "game_finished", "players_requested", "players_finished", "play_on_anything_cards", "play_order", "less_than_card","transparent_card","burn_card","reset_card","number_of_decks","number_face_down_cards","number_hand_cards","current_turn_number","last_player", "players_ready_to_start", "deal_done" FROM games WHERE gameid = :game_id',
                                              game_id=self.state.game_id)
         config = config[0]
+        print("config loaded from db", jsonpickle.dumps(config, unpicklable=False))
         self.state.game_finished = config["game_finished"]
         self.state.number_of_players_requested = config["players_requested"]
         self.state.players_finished = json.loads(config["players_finished"])
@@ -371,65 +447,85 @@ class Game(object):
             config["players_ready_to_start"])
         self.state.deal_done = config["deal_done"]
 
+
         # load decks
-        self.cards.pile_deck = self.__load_cards_from_database(
-            Game.PILE_DECK, self.state.game_id, database_connection)
-        self.cards.pile_burn = self.__load_cards_from_database(
-            Game.PILE_BURN, self.state.game_id, database_connection)
-        self.cards.pile_played = self.__load_cards_from_database(
-            Game.PILE_PLAYED, self.state.game_id, database_connection)
-        self.cards.pile_pick = self.__load_cards_from_database(
-            Game.PILE_PICK, self.state.game_id, database_connection)
+        for pile_id in self.Card_Pile_ID:
+            setattr(self.cards, self.Pile_Objects[pile_id], self.__load_cards_from_database(pile_id.value, self.state.game_id, session))
+
+
         self.__update_pile_sizes()
 
         for player in self.players:
-            player.load(database_connection, self.state.game_id)
+            if not player.load(session, self.state.game_id):
+                return False
             # store a reference to this player's object on the game itself
             if player.ID == self.state.this_player_id:
                 self.this_player = player
+        return True
 
     def __update_pile_sizes(self):
         """updates the summary count of each pile size, and copies the played pile to the active state"""
-        self.state.pile_pick_size = len(self.cards.pile_pick)
-        self.state.pile_played_size = len(self.cards.pile_played)
-        self.state.pile_burn_size = len(self.cards.pile_burn)
-        self.state.pile_deck_size = len(self.cards.pile_deck)
+        for pile_id in self.Card_Pile_ID:
+            setattr(self.state, self.Pile_Counts[pile_id], len(getattr(self.cards, self.Pile_Objects[pile_id])))
+
         self.state.play_list = self.cards.pile_played
+        
 
     def calculate_player_allowed_actions(self):
-        """calculates what action, if any, the current player is allowed to perform"""
-        response = {"allowed_action": "unknown", "allowed_players": "unknown"}
+        """calculates what action, if any, the current player is allowed to perform
 
-        if len(self.state.players_finished) == len(self.players):
+            returns:
+            always:
+                "allowed_action": finished | lost | wait | swap | play,
+                "action-message": to display to the end user
+
+            depending on state:
+                "allowed_cards": Card_Types.Short_Name,
+                "allowed_players": a list of players allowed to play,
+                "is_next_player": boolean,
+        """
+        response = {"allowed_action": "unknown", "allowed_players": "unknown"}
+        all_player_id = set([player.ID for player in self.players])
+        players_still_to_swap = (
+            list(all_player_id - set(self.state.players_ready_to_start)))
+        players_still_not_finished = (
+            list(all_player_id - set(self.state.players_finished)))
+        print("set(self.state.players_ready_to_start)", set(self.state.players_ready_to_start), "set(self.state.players_finished)", set(self.state.players_finished),
+              "all_player_id", all_player_id, "players_still_to_swap", players_still_to_swap, "players_still_not_finished", players_still_not_finished)
+        if len(players_still_to_swap) > 0:
+            # still some players not yet ready to start --> must be swapping
+            if self.state.this_player_id in players_still_to_swap:
+                action = "swap"
+                message = "You can choose to swap cards,"
+            else:
+                action = "wait"
+                message = "You've swapped - but others are still swapping. Wait for them..."
+            response = {"allowed_action": action,
+                        "action-message": message,
+                        "allowed_players": players_still_to_swap}
+        elif len(players_still_not_finished) == 0:
             # all done
             response = {"allowed_action": "finished",
                         "action-message": "Game over"}
             self.state.game_finished = True
-        elif (not self.this_player.ID in self.state.players_finished) and ((len(self.players) - len(self.state.players_finished)) == 1):
+        elif (self.this_player.ID in players_still_not_finished and
+              len(players_still_not_finished) == 1):
             # you;re the last player
             response = {"allowed_action": "lost",
                         "action-message": "You lost!"}
         elif self.this_player.ID in self.state.players_finished:
             # this player finished, others havent
-            allowed_players = (list(
-                set(player.ID for player in self.players) - set(self.state.players_finished)))
             response = {"allowed_action": "wait",
-                        "allowed_players": allowed_players}
-        elif len(self.state.players_ready_to_start) < len(self.players):
-            # still some players waiting to swap
-            # https://www.geeksforgeeks.org/python-difference-two-lists/
-            allowed_players = (list(set(
-                player.ID for player in self.players) - set(self.state.players_ready_to_start)))
-            response = {"allowed_action": "swap",
-                        "allowed_players": allowed_players}
-        else:
-            # ok - so we've not finished the game
+                        "action-message": "You've finished - but others are still playing. Please wait.",
+                        "allowed_players": players_still_not_finished}
+        elif self.this_player.ID in players_still_not_finished:
+            # ok - so we've not finished the game overall
+            # this player is still in play too
             # and everyone has swapped
             # so must be in game play
             # check if we're next or have to wait
-            allowed_players = (list(
-                set(player.ID for player in self.players) - set(self.state.players_finished)))
-            is_next_player = self.state.this_player_id == self.state.play_order[0]
+
+            is_next_player = self.this_player.ID == self.state.play_order[0]
             if is_next_player:
                 # can we actually play or do we have to pick up?
                 card_type, card_stack = self.this_player.which_player_cards_can_player_use()
@@ -439,19 +535,23 @@ class Game(object):
                     # or if we have only face down cards left
                     # let us play
                     action = "play"
+                    action_message = "Please play your move"
                 else:
                     action = "pick"
+                    action_message = "You can't play - you must pick up cards."
                 response = {"allowed_action": action,
                             "allowed_cards": Card_Types.Short_Name[card_type],
-                            "allowed_players": allowed_players,
+                            "action-message": action_message,
+                            "allowed_players": players_still_not_finished,
                             "is_next_player": is_next_player}
             else:
                 # someone else is the next player
                 response = {"allowed_action": "wait",
-                            "allowed_players": allowed_players,
+                            "allowed_players": players_still_not_finished,
                             "is_next_player": is_next_player,
                             "action-message": "wait for others to finish their moves"}
-
+        else:
+            raise ValueError("Unable to calculate game allowed moves")
         return response
 
     def add_to_pile(self, deck_type, cards_to_add=[], *args):
@@ -472,9 +572,28 @@ class Game(object):
         self.__update_pile_sizes()
         return
 
+    def work_out_who_plays_first(self):
+        """ looks at all the players 'hand' cards and finds the one with the lowest rank.
+            that player starts the game, the others proceed in numerical order from them.
+        """
+        lowest_player = None
+        lowest_rank = 999
+
+        for player in self.players:
+            this_player_lowest_rank = min([card.rank for card in player.hand])
+            if (this_player_lowest_rank < lowest_rank and
+                    this_player_lowest_rank not in self.state.get_all_special_cards()):
+                lowest_player = player.ID
+                lowest_rank = this_player_lowest_rank
+
+        while not self.state.play_order[0] == lowest_player:
+            self.rotate_player()
+
     def play_no_swap(self):
         """plays the move 'dont swap, ready to start' at the beginning of the game"""
         self.state.players_ready_to_start.append(self.state.this_player_id)
+        if len(self.state.players_ready_to_start) == len(self.players):
+            self.work_out_who_plays_first()
         return {'action': 'no_swap', 'action_result': True}
 
     def play_pick_up(self):
@@ -501,7 +620,7 @@ class Game(object):
         self.rotate_player()
         return {'action': 'pick', 'action_result': True}
 
-    def play_move(self, cards_to_play, player):
+    def play_move(self, cards_to_play):
         """ plays a given move"""
         # check game state
         # 1. is "play" a valid move?
@@ -515,102 +634,147 @@ class Game(object):
         if (allowed_actions["allowed_action"] == "play" and
                 allowed_actions["is_next_player"] == True):
             if cards_to_play:
-                    # validate that these cards are in this user's hand
-                validated_card_indexes = []
-                card_type = ""
-                for card_description in cards_to_play:
-                    card_index = int(card_description[2:])
-                    print("card_index", card_index,
-                          "card_description", card_description)
-                    allowed_cards = Card_Types.Get_Code[allowed_actions["allowed_cards"]]
-                    try:
-                        card_type = Card_Types.Get_Code[card_description[0]]
-                    except (KeyError, IndexError):
-                        result = {'action': 'play', 'action_result': False,
-                                  'action_message': f'Unknown card type {card_description[0]}'}
-                        return result
-                    except:
-                        raise
+                allowed_actions = self.calculate_player_allowed_actions()
+                allowed_card_type = Card_Types.Card_Type_From_Code.get(
+                    allowed_actions["allowed_cards"])
+                # validate that these cards are in this user's hand and are all the same type (face down, up, hand)
+                response, validated_cards, card_type = self.__validate_cards_exist_in_type(
+                    cards_to_play, allowed_card_type)
 
-                    if (card_type == Card_Types.CARD_FACE_DOWN and
-                            len(cards_to_play) != 1):
-                        # can only play one face down card at a time
-                        result = {'action': 'play', 'action_result': False,
-                                  'action_message': f'You can only play one face down card at a time'}
-                        return result
-                    if card_type != allowed_cards:
-                        response = {'action': 'play', 'action_result': False,
-                                    'action_message': f'You can only play cards of type {Card_Types.Long_Name[allowed_cards]} but you sent card of type {Card_Types.Long_Name[card_type]}'}
-                        return response
-                    message = self.__check_card_index_not_over_deck_length(
-                        card_index, card_type, player)
-                    if message:
-                        response = {
-                            'action': 'play', 'action_result': False, 'action_message': message}
-                        return response
-                    validated_card_indexes.append(card_index)
-
-                card_dict = self.this_player.get_cards(card_type)
-                validated_cards = list(
-                    card_dict[card_location] for card_location in validated_card_indexes)
-
-                # check if all cards are the same rank:
-                if not self.__are_all_cards_same_rank(validated_cards):
+                if response:
+                    return response
+                elif not self.__are_all_cards_same_rank(validated_cards):
+                    # check if all cards are the same rank:
                     result = {'action': 'play', 'action_result': False,
                               'action_message': f'If playing more than one card, they must all be the same rank (value).'}
                     return result
 
                 can_play_cards = self.__can_play_cards(validated_cards)
-                print("can_play_cards", can_play_cards)
 
                 if can_play_cards:
-                    # great - play teh cards!
-                    self.cards.pile_played.extend(validated_cards)
-                    # remove these cards from teh player's hand/hidden/up cards and refill their hand if there are cards left in teh deck
-                    self.this_player.remove_cards_from_player_cards(
+                    response = self.play_validated_cards(
                         validated_cards, card_type)
-                    if card_type == Card_Types.CARD_HAND:
-                        while (len(player.hand) < self.state.number_hand_cards and
-                               len(self.cards.pile_deck) > 0):
-                            player.hand.append(self.cards.pile_deck.pop())
-
-                    # check if last move clears the deck
-                    if self.__clears_deck(self.cards.pile_played):
-                        self.cards.pile_burn.extend(self.cards.pile_played)
-                        self.cards.pile_played = []
-                    else:
-                        self.rotate_player()
-
-                    if not player.face_down:
-                        # have run out of cards
-                        self.state.players_finished.append(player.ID)
-                        if len(self.state.players_finished) == len(self.players):
-                            self.state.game_finished = True
-                        response = {'action': 'wait', 'action_result': True}
-                    else:
-                        response = {'action': 'play', 'action_result': True}
                 else:
                     if card_type == Card_Types.CARD_FACE_DOWN:
                         # tried to play a face down card but lost
                         # move this card to the player's hand
-                        player.add_cards_to_player_cards(
+                        self.this_player.add_cards_to_player_cards(
                             validated_cards, Card_Types.CARD_HAND)
                         # pick up the rest of the played cards
                         self.__pick_up_cards()
                         self.this_player.remove_cards_from_player_cards(
                             validated_cards, card_type)
-                        response = {'action': 'play', 'action_result': True,
-                                    'action_message': 'playing down cards not yet implemented'}
+                        response = {'action': 'play',
+                                    'action_result': True,
+                                    'action_message': 'You played a face down card but lost'}
                     else:
-                        response = {'action': 'play', 'action_result': False,
+                        response = {'action': 'play',
+                                    'action_result': False,
                                     'action_message': f'Cannot play that move on the current stack'}
-                    self.__update_pile_sizes()
+
                     # return response
                 # response = {'action':'play', 'action_result':True}
             else:
                 response = {'action': 'play', 'action_result': False,
                             'action_message': "Select one or more cards to play"}
+        self.__update_pile_sizes()
         return response
+
+    def play_validated_cards(self, validated_cards, card_type):
+        """plays a set of validated_cards of type card_type for the current player"""
+        # great - play teh cards!
+        response = {'action': 'play',
+                    'action_result': True}
+        self.cards.pile_played.extend(validated_cards)
+        # remove these cards from teh player's hand/hidden/up cards and refill their hand if there are cards left in teh deck
+        self.this_player.remove_cards_from_player_cards(
+            validated_cards, card_type)
+        if card_type == Card_Types.CARD_HAND:
+            # replenish the player's hand from the deck
+            # while there are still cards in the pile, and
+            # while they have fewer than number_hand_cards
+            # cards in their hand
+            while (len(self.this_player.hand) < self.state.number_hand_cards and
+                    len(self.cards.pile_deck) > 0):
+                self.this_player.hand.append(self.cards.pile_deck.pop())
+
+        if (not self.this_player.face_down) and (not self.this_player.face_up) and (not self.this_player.hand):
+            # has run out of cards. Game over (for them at least)!
+            print("have run out of cards")
+            self.state.players_finished.append(self.this_player.ID)
+            if (len(self.players) - len(self.state.players_finished)) < 2:
+                # all players in players_finished
+                self.state.game_finished = True
+                message = "game over!"
+            else:
+                message = "You've finished. Wait for others."
+            response = {'action': 'play',
+                        'action_result': True,
+                        "action_message": message}
+
+        # check if last move clears the deck
+        if self.__clears_deck(self.cards.pile_played):
+            self.cards.pile_burn.extend(self.cards.pile_played)
+            self.cards.pile_played = []
+        else:
+            self.rotate_player()
+
+        return response
+
+    def __validate_cards_exist_in_type(self, cards_to_play, allowed_card_type):
+        """validate that a set of card indexes exists within a set of cards
+           of a given type belonging to this player. Check also that the cards
+           are all of the same rank. If they are, return the validated list of
+           cards, otherwise return narative error"""
+
+        response = None
+
+        card_types = [card_description[0]
+                      for card_description in cards_to_play]
+        card_type = Card_Types.Card_Type_From_Code.get(card_types[0])
+
+        card_indexes = [int(card_description[2:])
+                        for card_description in cards_to_play]
+
+        if not card_type:
+            response = {'action': 'play',
+                        'action_result': False,
+                        'action_message': f"Unknown card type '{card_type}'."}
+
+        elif card_types.count(card_types[0]) != len(card_types):
+            print("card_types.count(card_types[0]) != len(card_types)", card_types.count(
+                card_types[0]) != len(card_types))
+            response = {'action': 'play',
+                        'action_result': False,
+                        'action_message': 'You can only play cards of the same type (hand, face up, face down) in a single move.'}
+
+        elif card_type != allowed_card_type:
+            response = {'action': 'play',
+                        'action_result': False,
+                        'action_message': 'You cannot play that card type at this time.'}
+
+        elif (card_type == Card_Types.CARD_FACE_DOWN and
+              len(card_types) != 1):
+                # can only play one face down card at a time
+            response = {'action': 'play', 'action_result': False,
+                        'action_message': f'You can only play one face down card at a time'}
+
+        elif self.__check_card_index_over_deck_length(
+                max(card_indexes), card_type):
+            response = {'action': 'play', 'action_result': False,
+                        'action_message': f'Attempted to play card which is above face card count in __validate_cards_exist_in_type.'}
+
+        if not response:
+            cards_being_played_from = self.this_player.get_cards(card_type)
+            # validated_cards contains a list of Card objects which have been demonstated
+            # to be the same rank and that actually exist in a given set of cards that a player has
+            # (e.g. face down, face up, or hand).
+            response = None
+            validated_cards = list(
+                cards_being_played_from[card_location] for card_location in card_indexes)
+        else:
+            validated_cards = None
+        return response, validated_cards, card_type
 
     def __clears_deck(self, played_pile):
         all_match = False
@@ -626,7 +790,7 @@ class Game(object):
                 all_match)
 
     def __are_all_cards_same_rank(self, cards):
-        """checks whether all the cards in a given set are al of the same value"""
+        """checks whether all the cards in a given set are all of the same value"""
         # now check they're all the same
         last_card = None
         for card in cards:
@@ -638,7 +802,7 @@ class Game(object):
 
     def __can_play_cards(self, cards_to_check):
         """checks whether the card/cards can be played e.g. does
-           the user have ANY cards in their hand which can be played
+           the user have ANY cards in the set cards_to_check which can be played
            on the current played stack, or can the cards in the user's play
            list be played on teh current played stack"""
         print("cards", jsonpickle.dumps(cards_to_check))
@@ -660,30 +824,26 @@ class Game(object):
                         return True
             return False
 
-    def __check_card_index_not_over_deck_length(self, card_index, card_type, player):
+    def __check_card_index_over_deck_length(self, card_index, card_type):
         """checks that the card at a given index actually exists in the given hand"""
-        if card_type == Card_Types.CARD_FACE_UP:
-            deck = player.face_up
-        elif card_type == Card_Types.CARD_FACE_DOWN:
-            deck = player.face_down
-        elif card_type == Card_Types.CARD_HAND:
-            deck = player.hand
-        else:
-            message = f'unknown card type {card_type}.'
-            return message
 
-        if (card_index > len(deck) - 1):
-            message = f'Attempted to play card {card_index} which is above face card count {len(deck) - 1}.'
-            return message
+        if card_type == Card_Types.CARD_FACE_UP:
+            deck = self.this_player.face_up
+        elif card_type == Card_Types.CARD_FACE_DOWN:
+            deck = self.this_player.face_down
+        elif card_type == Card_Types.CARD_HAND:
+            deck = self.this_player.hand
         else:
-            return None
+            raise ValueError(
+                f'unknown card type {card_type} in __check_card_index_over_deck_length.')
+
+        return card_index > (len(deck) - 1)
 
     def swap_cards(self, cards_to_swap, player):
         """swaps cards in hand with cards in face up"""
         # check game state - has this user already committed cards?
         # if not, then just swap the cards
         response = None
-        # if not player.ID in self.state.players_ready_to_start:
 
         allowed_actions = self.calculate_player_allowed_actions()
         if (allowed_actions["allowed_action"] == "swap" and
@@ -692,39 +852,32 @@ class Game(object):
             print("ready to swap")
             hand_cards = []
             face_cards = []
+
             for card in cards_to_swap:
-                index = int(card[2:])
-                print("index", index)
-                try:
-                    card_type = Card_Types.Get_Code[card[0]]
-                except (KeyError, IndexError):
-                    response = {'action': 'swap', 'action_result': False,
+                card_index = int(card[2:])
+                print("swapping for index", card_index)
+                card_type = Card_Types.Card_Type_From_Code.get(card[0])
+                if not card_type:
+                    response = {'action': 'swap',
+                                'action_result': False,
                                 'action_message': f"Unrecognised card type '{card[0]}'"}
                     return response
-                except:
-                    raise
+
+                if self.__check_card_index_over_deck_length(card_index, card_type):
+                    response = {
+                        'action': 'swap',
+                        'action_result': False,
+                        'action_message': f"Attempted to play card number {card_index} in set {Card_Types.Long_Name[card_type]} which is over set length"}
+                    return response
 
                 if card_type == Card_Types.CARD_FACE_UP:
-                    # face card
-                    message = self.__check_card_index_not_over_deck_length(
-                        index, card_type, player)
-                    if message:
-                        response = {
-                            'action': 'swap', 'action_result': False, 'action_message': message}
-                        return response
-                    face_cards.append(index)
-                elif card_type == Card_Types.CARD_HAND:
-                    # hand card
-                    message = self.__check_card_index_not_over_deck_length(
-                        index, card_type, player)
+                    face_cards.append(card_index)
 
-                    if message:
-                        response = {
-                            'action': 'swap', 'action_result': False, 'action_message': message}
-                        return response
-                    hand_cards.append(index)
+                elif card_type == Card_Types.CARD_HAND:
+                    hand_cards.append(card_index)
                 else:
-                    response = {'action': 'swap', 'action_result': False,
+                    response = {'action': 'swap',
+                                'action_result': False,
                                 'action_message': 'You can only swap hand and face up cards.'}
                     return response
 
@@ -738,79 +891,62 @@ class Game(object):
                 for i in range(len(hand_cards)):
                     player.hand[hand_cards[i]], player.face_up[face_cards[i]
                                                                ] = player.face_up[face_cards[i]], player.hand[hand_cards[i]]
-
                 response = {'action': 'swap', 'action_result': True}
 
         else:
             response = {'action': 'swap', 'action_result': False,
                         'action_message': 'You can\'t swap cards right now'}
-
+        print("swap response", jsonpickle.dumps(response, unpicklable=False))
         return response
 
-    def __load_cards_from_database(self, deck_type, game_id, database_connection):
+    def __load_cards_from_database(self, deck_type, game_id, session):
         """load a set of cards and return them in a sorted list"""
-        cards = database_connection.execute("SELECT card_suit, card_rank FROM game_cards WHERE game_id = :game_id AND card_location = :deck_type ORDER BY card_sequence ASC",
+        c = common_db.Common_DB()
+        print("deck_type", deck_type, "game_id", game_id)
+        cards = c.execute(session, "SELECT card_suit, card_rank FROM game_cards WHERE game_id = :game_id AND card_location = :deck_type",
                                             game_id=game_id, deck_type=deck_type)
         cards_to_return = []
         if len(cards) > 0:
+            print(f"found {len(cards)} cards")
             cards_to_return.extend(
                 [Card(card["card_suit"], card["card_rank"]) for card in cards])
         return cards_to_return
 
-    def __persist_cards_to_database(self, deck=[], *args, deck_type, game_id, database_connection):
-        """persist a set of cards to the database as part of game state"""
-        # first, clear all cards of this type for this game
-        result = database_connection.execute("DELETE FROM game_cards WHERE card_location=:card_type AND game_id = :game_id",
-                                             card_type=deck_type,
-                                             game_id=game_id)
-        if len(deck) > 0:
-
-            i = 0
-            for card in deck:
-                result = database_connection.execute("INSERT INTO game_cards (game_id, card_location, card_suit, card_rank, card_sequence) VALUES (:game_id, :deck_type, :card_suit, :card_rank, :i)",
-                                                     game_id=game_id,
-                                                     deck_type=deck_type,
-                                                     card_suit=card.suit,
-                                                     card_rank=card.rank,
-                                                     i=i)
-                if not result:
-                    return False
-                i += 1
-        return True
-
-
-def get_users_for_game(game_id, database_connection):
+def get_users_for_game(game_id, session):
     """load the list of users playing a game"""
-    players = database_connection.execute("SELECT player_id FROM player_game WHERE game_id = :game_id",
+    c = common_db.Common_DB()
+    players = c.execute(session, "SELECT player_id FROM player_game WHERE game_id = :game_id",
                                           game_id=game_id)
     list_of_players = []
     if len(players) > 0:
         list_of_players.extend([player["player_id"] for player in players])
     return list_of_players
 
-def get_list_of_games_looking_for_players(player_id, database_connection):
+
+def get_list_of_games_looking_for_players(player_id):
     """find all the games that this player is waiting to start"""
-
     sql = "SELECT games.gameid, player_counts.number_of_players, games.game_ready_to_start, games.game_finished, games.players_requested FROM games LEFT JOIN (SELECT player_game.game_id as game_id, count(player_game.player_id) as number_of_players FROM player_game group by player_game.game_id) as player_counts ON games.gameid = player_counts.game_id LEFT JOIN (select game_id from player_game where player_id = :player_id) AS games_to_exclude on games_to_exclude.game_id = games.gameid where games_to_exclude.game_id IS NULL"
-
-    games = database_connection.execute(
+    c = common_db.Common_DB()
+    games = c.execute(c.common_engine,
         sql, player_id=player_id)
     return games
 
-def get_list_of_games_for_this_user(player_id, database_connection, include_only_unready=False, include_finished=True):
+
+def get_list_of_games_for_this_user(player_id, include_only_unready=False, include_finished=True):
     """find all the games that this player is waiting to start"""
 
     sql = "SELECT games.gameid, player_counts.number_of_players, games.game_ready_to_start, games.game_finished, games.players_requested FROM games join (select player_game.game_id from player_game where player_game.player_id = :player_id) as games_for_this_player on games.gameid = games_for_this_player.game_id LEFT JOIN (SELECT player_game.game_id as game_id, count(player_game.player_id) as number_of_players FROM player_game group by player_game.game_id) as player_counts ON games.gameid = player_counts.game_id"
-
+    
     conditionals = []
     if include_only_unready:
-        conditionals.append("games.players_requested > player_counts.number_of_players")
+        conditionals.append(
+            "games.players_requested > player_counts.number_of_players")
     if not include_finished:
         conditionals.append("games.game_finished = true")
 
     if conditionals:
         sql = " WHERE ".join([sql, " AND ".join(conditionals)])
-
-    games = database_connection.execute(
+    c = common_db.Common_DB()
+    games = c.execute(c.common_engine,
         sql, player_id=player_id)
     return games

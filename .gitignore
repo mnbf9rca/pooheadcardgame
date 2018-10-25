@@ -1,6 +1,10 @@
 ### c9
 .~c9_invoke_*
 
+## passwords
+*credentials*
+*creds*
+
 ### python .gitignore
 # Byte-compiled / optimized / DLL files
 __pycache__/
