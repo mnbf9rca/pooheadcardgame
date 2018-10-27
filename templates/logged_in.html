@@ -6,34 +6,33 @@ Play cards!
 
 {% block main %}
 
-<p class="card-text" id="game-id">Your player ID {{session["user_id"]}}.</p>
+<p class="card-text" id="game-id">You're logged in with player ID {{session["user_id"]}}.</p>
 {% if message %}
 <div class='alert alert-primary' role='alert'>{{message}}</div>
 {% endif %}
-<div>you're logged in. here's a list of your current games:
+<div>
+    <div><h3>Here's a list of your current games</h3></div>
 
     <div class="container">
-            <div class="row row-head" >
-                    <div class="col">
-                        Game ID
-                    </div>
-                    <div class="col">
-                        Players requested
-                    </div>
-                    <div class="col">
-                        Number who have joined
-                    </div>
-                    <div class="col">
-                        Game finished?
-                    </div>
+        <div class="row row-head">
+            <div class="col">
+                Game ID
+            </div>
+            <div class="col">
+                Players requested
+            </div>
+            <div class="col">
+                Number who have joined
+            </div>
 
-                    <div class="col">
-                        Game ready to start?
-                    </div>
-                    <div class="col">
 
-                    </div>
-                </div>
+            <div class="col">
+                Game ready to start?
+            </div>
+            <div class="col">
+
+            </div>
+        </div>
         {% for g in games %}
         <div class="row row-hover row-striped ">
             <div class="col">
@@ -44,9 +43,6 @@ Play cards!
             </div>
             <div class="col">
                 {{g.number_of_players}}
-            </div>
-            <div class="col">
-                {{g.game_finished|int == True }}
             </div>
 
             <div class="col">
@@ -61,29 +57,24 @@ Play cards!
         {% endfor %}
 
     </div>
-    <div><h3>Here is a list of other games which are still short of players</h3></div>
+    <div>
+        <h3>Here is a list of other games which are still short of players</h3>
+    </div>
     <div class="container">
-            <div class="row row-head" >
-                    <div class="col">
-                        Game ID
-                    </div>
-                    <div class="col">
-                        Players requested
-                    </div>
-                    <div class="col">
-                        Number who have joined
-                    </div>
-                    <div class="col">
-                        Game finished?
-                    </div>
+        <div class="row row-head">
+            <div class="col">
+                Game ID
+            </div>
+            <div class="col">
+                Players requested
+            </div>
+            <div class="col">
+                Number who have joined
+            </div>
+            <div class="col">
 
-                    <div class="col">
-                        Game ready to start?
-                    </div>
-                    <div class="col">
-
-                    </div>
-                </div>
+            </div>
+        </div>
         {% for g in new_games %}
         <div class="row row-hover row-striped ">
             <div class="col">
@@ -96,19 +87,52 @@ Play cards!
                 {{g.number_of_players}}
             </div>
             <div class="col">
-                {{g.game_finished|int == True }}
-            </div>
-
-            <div class="col">
-                {{g.game_ready_to_start|int == True}}
-            </div>
-            <div class="col">
                 {% if ((g.game_ready_to_start|int == False) and (g.game_finished|int == False)) %}
                 <a href='{{url_for("load_game")}}?add=1&game_id={{ g.gameid }}'>Go to game --></a>
                 {% endif %}
             </div>
         </div>
         {% endfor %}
-    <div>or <a href='{{ url_for("startnewgame") }}'>Request a new game</a></div>
-</div>
+        <div>or <a href='{{ url_for("startnewgame") }}'>request a new game</a>
+        </div>
+    </div>
+    <div>
+        <h3>Here are your completed games</h3>
+    </div>
+    <div class="container">
+        <div class="row row-head">
+            <div class="col">
+                Game ID
+            </div>
+            <div class="col">
+                Players requested
+            </div>
+            <div class="col">
+                Number who have joined
+            </div>
+            <div class="col">
+                Loser?
+            </div>
+
+        </div>
+        {% for g in finished_games %}
+        <div class="row row-hover row-striped ">
+            <div class="col">
+                {{g.gameid}}
+            </div>
+            <div class="col">
+                {{g.players_requested}}
+            </div>
+            <div class="col">
+                {{g.number_of_players}}
+            </div>
+            <div class="col">
+                Player {{g.play_order}}
+            </div>
+
+        </div>
+        {% endfor %}
+        <div>
+        </div>
+    </div>
     {% endblock %}

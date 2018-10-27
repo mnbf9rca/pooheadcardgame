@@ -22,16 +22,11 @@ Base = declarative_base()
 
 class Game(object):
 
-    PILE_BURN = 1
-    PILE_PICK = 2
-    PILE_PLAYED = 3
-    PILE_DECK = 4
-
     class Card_Pile_ID(Enum):
-        PILE_BURN = 1
-        PILE_PICK = 2
-        PILE_PLAYED = 3
-        PILE_DECK = 4
+        PILE_BURN = Card_Types.CARD_BURN
+        PILE_PICK = Card_Types.CARD_PICK
+        PILE_PLAYED = Card_Types.CARD_PLAYED
+        PILE_DECK = Card_Types.CARD_DECK
 
     Pile_Objects = {
         Card_Pile_ID.PILE_DECK: "pile_deck",
@@ -524,6 +519,7 @@ class Game(object):
             logger.debug("Only 1 player left, and it's this player")
             response = {"allowed_action": "lost",
                         "action_message": "You lost!"}
+            self.state.game_finished = True
         elif len(self.state.play_order) < 2:
             # all done
             logger.debug("only 1 player left, but it's not this playe")
@@ -577,27 +573,6 @@ class Game(object):
             logger.error("Unable to calculate game allowed moves")
             raise ValueError("Unable to calculate game allowed moves")
         return response
-
-    '''
-    REMOVED?
-    def add_to_pile(self, deck_type, cards_to_add=[], *args):
-        """add card to pile and update size"""
-        if not cards_to_add:
-            raise ValueError('tried to add a card to pile without a card.')
-
-        if deck_type == Game.PILE_BURN:
-            self.cards.pile_burn.extend(cards_to_add)
-        elif deck_type == Game.PILE_PICK:
-            self.cards.pile_pick.extend(cards_to_add)
-        elif deck_type == Game.PILE_PLAYED:
-            self.cards.pile_played.extend(cards_to_add)
-        elif deck_type == Game.PILE_DECK:
-            self.cards.pile_deck.extend(cards_to_add)
-        else:
-            raise ValueError(f'cant find pile for {deck_type}.')
-        self.__update_pile_sizes()
-        return
-    '''
 
     def work_out_who_plays_first(self):
         """ looks at all the players 'hand' cards and finds the one with the lowest rank.
@@ -689,18 +664,15 @@ class Game(object):
                 can_play_cards = self.__can_play_cards(validated_cards)
 
                 if can_play_cards:
-                    response = self.play_validated_cards(
-                        validated_cards, card_type)
+                    response = self.play_validated_cards(validated_cards, card_type)
                 else:
                     if card_type == Card_Types.CARD_FACE_DOWN:
                         # tried to play a face down card but lost
                         # move this card to the player's hand
-                        self.this_player.add_cards_to_player_cards(
-                            validated_cards, Card_Types.CARD_HAND)
+                        self.this_player.add_cards_to_player_cards(validated_cards, Card_Types.CARD_HAND)
                         # pick up the rest of the played cards
                         self.__pick_up_cards()
-                        self.this_player.remove_cards_from_player_cards(
-                            validated_cards, card_type)
+                        self.this_player.remove_cards_from_player_cards(validated_cards, card_type)
                         response = {'action': 'play',
                                     'action_result': True,
                                     'action_message': 'You played a face down card but lost'}
@@ -742,11 +714,13 @@ class Game(object):
             # has run out of cards. Game over (for them at least)!
             logger.debug(f"Player {self.this_player.ID} has run out of cards")
             self.state.players_finished.append(self.this_player.ID)
-            # remove from play order
+            # skip checking or rotatiung player later
             just_run_out_of_cards = True
+            #remove this player from play rder
+            self.state.play_order.pop(0)
             if len(self.state.play_order) < 2:
                 # all players in players_finished
-                logger.debug("Fewer than 2 players left in game - game over!")
+                logger.debug("This player has finished, and now there are fewer than 2 players left in game - game over!")
                 self.state.game_finished = True
                 message = "game over!"
             else:
@@ -756,11 +730,9 @@ class Game(object):
                         'action_result': True,
                         "action_message": message}
 
-        if just_run_out_of_cards:
-            # remove this player from the play order
-            self.state.play_order.pop(0)
-        else:
-            # check if last move clears the deck
+        if not just_run_out_of_cards:
+            #skip this if we just poped ourselves from play order...
+            # # check if last move clears the deck
             if self.__clears_deck(self.cards.pile_played):
                 self.cards.pile_burn.extend(self.cards.pile_played)
                 self.cards.pile_played = []
@@ -974,21 +946,23 @@ def get_list_of_games_looking_for_players(player_id):
     return games
 
 
-def get_list_of_games_for_this_user(player_id, include_only_unready=False, include_finished=True):
+def get_list_of_games_for_this_user(player_id, include_game_ready=False, include_finished=False):
     """find all the games that this player is waiting to start"""
 
-    sql = "SELECT games.gameid, player_counts.number_of_players, games.game_ready_to_start, games.game_finished, games.players_requested FROM games join (select player_game.game_id from player_game where player_game.player_id = :player_id) as games_for_this_player on games.gameid = games_for_this_player.game_id LEFT JOIN (SELECT player_game.game_id as game_id, count(player_game.player_id) as number_of_players FROM player_game group by player_game.game_id) as player_counts ON games.gameid = player_counts.game_id"
+    sql = "SELECT games.gameid, player_counts.number_of_players, games.game_ready_to_start, (games.players_requested = player_counts.number_of_players)  as has_enough_players, games.game_finished, games.players_requested, games.play_order FROM games join (select player_game.game_id from player_game where player_game.player_id = :player_id) as games_for_this_player on games.gameid = games_for_this_player.game_id LEFT JOIN (SELECT player_game.game_id as game_id, count(player_game.player_id) as number_of_players FROM player_game group by player_game.game_id) as player_counts ON games.gameid = player_counts.game_id WHERE games.game_finished = :include_finished ORDER BY games.gameid ASC"
 
+    '''
     conditionals = []
     if include_only_unready:
-        conditionals.append(
-            "games.players_requested > player_counts.number_of_players")
-    if not include_finished:
-        conditionals.append("games.game_finished = true")
+        conditionals.append("games.players_requested > player_counts.number_of_players")
+    conditionals.append(f"games.game_finished = {include_finished}")
 
     if conditionals:
         sql = " WHERE ".join([sql, " AND ".join(conditionals)])
+    '''
     c = common_db.Common_DB()
     games = c.execute(c.common_engine,
-                      sql, player_id=player_id)
+                      sql,
+                      player_id=player_id,
+                      include_finished = include_finished)
     return games

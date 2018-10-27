@@ -93,9 +93,14 @@ def logged_in():
     # user is logged in, check for an active game
     message = request.args.get("msg", default="")
 
-    games = get_list_of_games_for_this_user(session["user_id"])
+    games = get_list_of_games_for_this_user(session["user_id"],include_game_ready=False, include_finished = False)
     new_games = get_list_of_games_looking_for_players(session["user_id"])
-    return render_template("logged_in.html", games=games, new_games=new_games, message=message)
+    finished_games = get_list_of_games_for_this_user(session["user_id"], include_game_ready=True, include_finished = True)
+    return render_template("logged_in.html", 
+                            games=games, 
+                            new_games=new_games, 
+                            finished_games=finished_games,
+                            message=message)
 
 
 @app.route("/load_game")
@@ -218,13 +223,11 @@ def startnewgame():
         if request.is_json:
             request_json = request.get_json(cache=False)
             app_logger.debug("/startnewgame with JSON: %s", request_json)
-            response, game = controller.do_start_new_game(
-                request_json, session["user_id"])
+            response, game = controller.do_start_new_game(request_json, session["user_id"])
             if game:
                 session["game_id"] = game.state.game_id
                 session["game"] = game
-                response["redirect"] = url_for(
-                    "logged_in") + response["redirect_querystring"]
+                response["redirect"] = url_for("logged_in") + response["redirect_querystring"]
             resp = make_response(jsonpickle.encode(
                 response, unpicklable=False), 200)
             resp.headers['Content-Type'] = 'application/json'

@@ -15,10 +15,6 @@ from sqlalchemy.orm import sessionmaker
 
 import models
 
-
-
-
-
 class Common_DB():
     """A singleton Common_DB object which contains a link to a DB connection
 
