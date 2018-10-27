@@ -6,9 +6,10 @@ class Card_Types:
     CARD_FACE_UP = 2
     CARD_HAND = 3
     CARD_NONE = 4
-    CARD_BURN_PILE = 5
+    CARD_BURN = 5
     CARD_DECK = 6
-    CARD_PLAYED_PILE = 7
+    CARD_PLAYED = 7
+    CARD_PICK = 8
     
     Long_Name = {CARD_FACE_DOWN: "face down",
                  CARD_FACE_UP: "face up",
@@ -18,6 +19,7 @@ class Card_Types:
                   CARD_FACE_UP: "f",
                   CARD_HAND: "h",
                   CARD_NONE: "n"}
+                  
     Card_Type_From_Code = {"d": CARD_FACE_DOWN,
                            "f": CARD_FACE_UP,
                            "h": CARD_HAND,

@@ -18,7 +18,7 @@ function enable_refresh_timer() {
         function () {
             check_state_change();
         },
-        500  /* 10000 ms = 10 sec */
+        500  /* 1000 ms = 1 sec */
     );
 };
 
@@ -218,22 +218,22 @@ function display_game_actions(allowed_moves, player_id) {
             case "wait": {
                 add_action_button("refresh");
                 enable_refresh_timer();
-                display_alert("wait for others to play.");
+                display_alert(allowed_moves.action_message);
                 break;
             };
             case "pick": {
                 add_action_button("Pick up cards");
-                display_alert("You can't play - you must pick up.");
+                display_alert(allowed_moves.action_message);
                 break;
             };
             case "lost": {
                 $('#ready-to-play-info').empty();
-                display_alert("you lost!");
+                display_alert(allowed_moves.action_message);
                 break;
             }
             case "finished": {
                 $('#ready-to-play-info').empty();
-                display_alert("Game finished");
+                display_alert(allowed_moves.action_message);
                 break;
             };
             default: {
@@ -437,11 +437,11 @@ function lay_out_game_cards(number_of_cards, card_type, card_list = null) {
 function display_game_rules(state) {
     // populate game rules
     $('#game-rules').empty();
-    game_rules = "<p class='card-text'>Burn card: " + check_card(state.burn_card) + "</p>";
-    game_rules += "<p class='card-text'>Less than card: " + check_card(state.less_than_card) + "</p>";
-    game_rules += "<p class='card-text'>Reset card: " + check_card(state.reset_card) + "</p>";
-    game_rules += "<p class='card-text'>Transparent card: " + check_card(state.transparent_card) + "</p>";
-    game_rules += "<p class='card-text'>Cards you can play on anything: " + check_card(state.play_on_anything_cards) + "</p>";
+    game_rules = "<p class='card-text no-margin'>Burn card: " + check_card(state.burn_card) + "</p>";
+    game_rules += "<p class='card-text no-margin'>Less than card: " + check_card(state.less_than_card) + "</p>";
+    game_rules += "<p class='card-text no-margin'>Reset card: " + check_card(state.reset_card) + "</p>";
+    game_rules += "<p class='card-text no-margin'>Transparent card: " + check_card(state.transparent_card) + "</p>";
+    game_rules += "<p class='card-text no-margin'>Cards you can play on anything: " + check_card(state.play_on_anything_cards) + "</p>";
     $('#game-rules').append(game_rules);
 };
 
