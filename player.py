@@ -32,9 +32,9 @@ class Player:
         self.__db_object = None
 
     class Card_Pile_ID(Enum):
-        PLAYER_FACE_DOWN = 5
-        PLAYER_FACE_UP = 6
-        PLAYER_HAND = 7
+        PLAYER_FACE_DOWN = Card_Types.CARD_FACE_DOWN
+        PLAYER_FACE_UP = Card_Types.CARD_FACE_UP
+        PLAYER_HAND = Card_Types.CARD_HAND
     
     
     Pile_Objects = {

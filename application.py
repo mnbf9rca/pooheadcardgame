@@ -93,9 +93,9 @@ def logged_in():
     # user is logged in, check for an active game
     message = request.args.get("msg", default="")
 
-    games = get_list_of_games_for_this_user(session["user_id"],include_game_ready=False, include_finished = False)
+    games = get_list_of_games_for_this_user(session["user_id"],include_finished = False)
     new_games = get_list_of_games_looking_for_players(session["user_id"])
-    finished_games = get_list_of_games_for_this_user(session["user_id"], include_game_ready=True, include_finished = True)
+    finished_games = get_list_of_games_for_this_user(session["user_id"], include_finished = True)
     return render_template("logged_in.html", 
                             games=games, 
                             new_games=new_games, 
