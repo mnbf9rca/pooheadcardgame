@@ -126,6 +126,12 @@ class Game(object):
             raise ValueError(
                 f"Invalid value provided in requested configuration JSON: {min} < {val} < {max}")
         return val
+
+    def __parse_bool_from_json(self, value):
+        if value.lower() == "on":
+            return True
+        else:
+            return False
     
 
     def parse_requested_config(self, requested_config):
@@ -142,32 +148,33 @@ class Game(object):
                 message = "Unable to read 'name' or 'value' key in config_item"
                 return False, message
 
-            values_to_parse_as_int = {"less_than_card":(1,13), 
-                                      "transparent_card":(1,13),
-                                      "burn_card":(1,13), 
-                                      "reset_card":(1,13), 
+            values_to_parse_as_int = {"less_than_card":(0,13), 
+                                      "transparent_card":(0,13),
+                                      "burn_card":(0,13), 
+                                      "reset_card":(0,13), 
                                       "number_face_down_cards":(1,9),
                                       "number_hand_cards":(1,9),
                                       "number_of_decks":(1,2),
                                       "number_of_players_requested":(2,6)}
             
             values_to_parse_as_bool = {"less_than_card_on_anything":("less_than_card", False),
-                                       "transparent_card_on_anything":("transparent_card", False),
-                                       "burn_card_on_anything":("burn_card", False),
-                                       "reset_card_on_anything":("reset_card", False)}
+                                        "transparent_card_on_anything":("transparent_card", False),
+                                        "burn_card_on_anything":("burn_card", False),
+                                        "reset_card_on_anything":("reset_card", False)}
 
             if name in values_to_parse_as_int:
                 min, max = values_to_parse_as_int[name]
                 setattr(self.state, name, self.__parse_int_from_json(value, min, max))
 
             if name in values_to_parse_as_bool:
-                key, _ = values_to_parse_as_bool[name] 
+                state_attribute, currentval = values_to_parse_as_bool[name] 
                 # bool is a subclasss of int with value 0 or 1
-                values_to_parse_as_bool[name] = (key, self.__parse_int_from_json(value, 0, 1))
+                values_to_parse_as_bool[name] = (state_attribute, self.__parse_bool_from_json(value))
 
         # store a list of the "on everything" cards
-        for key, value in values_to_parse_as_bool:
-            parsed_value = getattr(self.state, key)
+        for key in values_to_parse_as_bool:
+            state_attribute, value = values_to_parse_as_bool[key] 
+            parsed_value = getattr(self.state, state_attribute)
             if parsed_value > 0:
                 list_of_special_cards.append(parsed_value)
                 if value:
@@ -339,8 +346,8 @@ class Game(object):
         if not(self.state.game_id):
             self.state.game_id = int(result)
 
-
-        if not c.execute(session, f"DELETE FROM game_cards WHERE game_id = {self.state.game_id} and player_id is null;"):
+        result = c.execute(session, f"DELETE FROM game_cards WHERE game_id = {self.state.game_id} and player_id is null;")
+        if result == None:
             # some kind of exception
             logger.error("unable to delete existing game cards")
             return False, "unable to delete existing game cards - rolling back"
