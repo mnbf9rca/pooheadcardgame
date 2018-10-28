@@ -126,6 +126,7 @@ class Game(object):
             raise ValueError(
                 f"Invalid value provided in requested configuration JSON: {min} < {val} < {max}")
         return val
+    
 
     def parse_requested_config(self, requested_config):
         """parses a serialised configuraiton sent by the new game
@@ -159,9 +160,10 @@ class Game(object):
                 min, max = values_to_parse_as_int[name]
                 setattr(self.state, name, self.__parse_int_from_json(value, min, max))
 
-            if name in values_to_parse_as_bool and isinstance(value, bool):
+            if name in values_to_parse_as_bool:
                 key, _ = values_to_parse_as_bool[name] 
-                values_to_parse_as_bool[name] = (key, value)
+                # bool is a subclasss of int with value 0 or 1
+                values_to_parse_as_bool[name] = (key, self.__parse_int_from_json(value, 0, 1))
 
         # store a list of the "on everything" cards
         for key, value in values_to_parse_as_bool:
@@ -171,10 +173,9 @@ class Game(object):
                 if value:
                     self.state.play_on_anything_cards.append(parsed_value)
 
+        message = "parsed successfully"
         no_duplicates = len(list_of_special_cards) == len(set(list_of_special_cards))
-        if no_duplicates:
-            message = "parsed successfully"
-        else:
+        if not no_duplicates:
             message = "duplicate special play cards"
         return no_duplicates, message
 
@@ -338,9 +339,8 @@ class Game(object):
         if not(self.state.game_id):
             self.state.game_id = int(result)
 
-        result = c.execute(
-            session, f"DELETE FROM game_cards WHERE game_id = {self.state.game_id} and player_id is null;")
-        if result == None:
+
+        if not c.execute(session, f"DELETE FROM game_cards WHERE game_id = {self.state.game_id} and player_id is null;"):
             # some kind of exception
             logger.error("unable to delete existing game cards")
             return False, "unable to delete existing game cards - rolling back"
@@ -353,9 +353,8 @@ class Game(object):
             logger.debug("saving pile_id %s", pile_id)
             relevant_pile = getattr(self.cards, self.Pile_Objects[pile_id])
 
-            for card in relevant_pile:
-                cards_to_store.append(
-                    f"({self.state.game_id}, NULL, {pile_id.value}, {card.suit}, {card.rank})")
+            cards_to_store.append([ f"({self.state.game_id}, NULL, {pile_id.value}, {card.suit}, {card.rank})" for card in relevant_pile])
+
 
         if cards_to_store:
             logger.debug("successfully identified game pile cards to save")
