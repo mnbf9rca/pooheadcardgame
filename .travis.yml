@@ -5,6 +5,10 @@ python:
 install:
   - pip install -r requirements.txt
 
+# disable shallow clone
+git:
+  depth: false
+
 addons:
   sonarcloud:
     organization: "mnbf9rca-github" # the key of the org you chose at step #3
