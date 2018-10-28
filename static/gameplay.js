@@ -71,7 +71,7 @@ function submit_action(action) {
     switch (action.toLowerCase()) {
         case "swap": {
             console.log("swap");
-            let cards = identify_selected_cards();
+            let picked_cards = identify_selected_cards();
             json_request = { "action": "swap", "action_cards": picked_cards };
             break;
         };
@@ -159,7 +159,7 @@ function render_game(result) {
 }
 
 function display_players(players_state, this_player_id, allowed_moves) {
-    this_player = null;
+    let this_player = null;
     $('#game-row').empty();
     for (let i = 0; i < players_state.length; i++) {
         let player = players_state[i];
@@ -370,7 +370,7 @@ function display_game_cards(game_state) {
     this_player_div = document.createElement("div");
     this_player_div.className = "col";
     this_player_div.setAttribute("id", "game_info");
-    header = document.createTextNode("Game stacks");
+    let header = document.createTextNode("Game stacks");
     this_player_div.appendChild(header);
 
     // pile_deck_size --> e
@@ -399,7 +399,7 @@ function lay_out_game_cards(number_of_cards, card_type, card_list = null) {
         child_div = document.createElement("div");
         child_div.className = "flex-div";
         let max_cards = Math.max(number_of_cards - 4, 0);
-        for (i = number_of_cards - 1, j = 0; i >= max_cards; i--) {
+        for (let i = number_of_cards - 1, j = 0; i >= max_cards; i--) {
             let card_header = document.createElement("div");
             card_header.appendChild(document.createTextNode((j--).toString()));
             card = card_list[i];
