@@ -498,7 +498,8 @@ class Game(object):
 
         players_still_not_finished = (list(all_player_id - set(self.state.players_finished)))
         logger.debug(f"players_still_not_finished: {players_still_not_finished}")
-        logger.debug(f"set(self.state.players_ready_to_start): {set(self.state.players_ready_to_start)}")
+        logger.debug(
+            f"set(self.state.players_ready_to_start): {set(self.state.players_ready_to_start)}")
 
         logger.debug(f"set(self.state.players_finished): {set(self.state.players_finished)}")
 
@@ -645,10 +646,12 @@ class Game(object):
         if (allowed_actions["allowed_action"] == "play" and allowed_actions["is_next_player"] == True):
             if cards_to_play:
                 logger.debug("play_move -> allowed 'play' -> has cards_to_play")
-                allowed_card_type = Card_Types.Card_Type_From_Code.get(allowed_actions["allowed_cards"])
+                allowed_card_type = Card_Types.Card_Type_From_Code.get(
+                    allowed_actions["allowed_cards"])
 
                 # validate that these cards are in this user's hand and are all the same type (face down, up, hand)
-                response, message, validated_cards, card_type = self.__validate_cards_exist_in_type(cards_to_play, allowed_card_type)
+                response, message, validated_cards, card_type = self.__validate_cards_exist_in_type(
+                    cards_to_play, allowed_card_type)
                 if not response:
                     logger.debug("Cannot play: %s", message)
                     return {'action': 'play',
@@ -669,7 +672,8 @@ class Game(object):
                     if card_type == Card_Types.CARD_FACE_DOWN:
                         # tried to play a face down card but lost
                         # move this card to the player's hand
-                        self.this_player.add_cards_to_player_cards(validated_cards, Card_Types.CARD_HAND)
+                        self.this_player.add_cards_to_player_cards(
+                            validated_cards, Card_Types.CARD_HAND)
                         # pick up the rest of the played cards
                         self.__pick_up_cards()
                         self.this_player.remove_cards_from_player_cards(validated_cards, card_type)
@@ -681,8 +685,6 @@ class Game(object):
                                     'action_result': False,
                                     'action_message': f'Cannot play that move on the current stack'}
 
-                    # return response
-                # response = {'action':'play', 'action_result':True}
             else:
                 response = {'action': 'play', 'action_result': False,
                             'action_message': "Select one or more cards to play"}
@@ -699,8 +701,8 @@ class Game(object):
         # remove these cards from teh player's hand/hidden/up cards and refill their hand if there are cards left in teh deck
         self.this_player.remove_cards_from_player_cards(validated_cards, card_type)
         logger.debug("Moved cards %s from player's pile %s",
-                    jsonpickle.encode(validated_cards, unpicklable=False),
-                    card_type)
+                     jsonpickle.encode(validated_cards, unpicklable=False),
+                     card_type)
         if card_type == Card_Types.CARD_HAND:
             # replenish the player's hand from the deck
             # while there are still cards in the pile, and
@@ -716,22 +718,24 @@ class Game(object):
             self.state.players_finished.append(self.this_player.ID)
             # skip checking or rotatiung player later
             just_run_out_of_cards = True
-            #remove this player from play rder
+            # remove this player from play rder
             self.state.play_order.pop(0)
             if len(self.state.play_order) < 2:
                 # all players in players_finished
-                logger.debug("This player has finished, and now there are fewer than 2 players left in game - game over!")
+                logger.debug(
+                    "This player has finished, and now there are fewer than 2 players left in game - game over!")
                 self.state.game_finished = True
                 message = "game over!"
             else:
-                logger.debug("Although this player has finished, there are at least 2 other players still active")
+                logger.debug(
+                    "Although this player has finished, there are at least 2 other players still active")
                 message = "You've finished. Wait for others."
             response = {'action': 'play',
                         'action_result': True,
                         "action_message": message}
 
         if not just_run_out_of_cards:
-            #skip this if we just poped ourselves from play order...
+            # skip this if we just poped ourselves from play order...
             # # check if last move clears the deck
             if self.__clears_deck(self.cards.pile_played):
                 self.cards.pile_burn.extend(self.cards.pile_played)
@@ -762,7 +766,7 @@ class Game(object):
         elif card_types.count(card_types[0]) != len(card_types):
             # TODO change this to use sets to compare
             logger.debug("card_types.count(card_types[0]) != len(card_types): %s",
-                        card_types.count(card_types[0]) != len(card_types))
+                         card_types.count(card_types[0]) != len(card_types))
             response = False
             message = 'You can only play cards of the same type (hand, face up, face down) in a single move.'
 
@@ -776,26 +780,27 @@ class Game(object):
             message = f'You can only play one face down card at a time'
 
         elif self.__check_card_index_over_deck_length(max(card_indexes), card_type):
-            response=False,
-            message =f'Attempted to play card which is above face card count in __validate_cards_exist_in_type.'
+            response = False,
+            message = f'Attempted to play card which is above face card count in __validate_cards_exist_in_type.'
 
         if response:
             cards_being_played_from = self.this_player.get_cards(card_type)
             # validated_cards contains a list of Card objects which have been demonstated
             # to be the same rank and that actually exist in a given set of cards that a player has
             # (e.g. face down, face up, or hand).
-            validated_cards = list(cards_being_played_from[card_location] for card_location in card_indexes)
+            validated_cards = list(
+                cards_being_played_from[card_location] for card_location in card_indexes)
         else:
-            validated_cards=None
+            validated_cards = None
         return response, message, validated_cards, card_type
 
     def __clears_deck(self, played_pile):
-        all_match=False
+        all_match = False
         if len(played_pile) > 3:
-            pile_played=played_pile[-4:]
+            pile_played = played_pile[-4:]
             print("card1", pile_played[0], "card2", pile_played[1],
                   "card3", pile_played[2], "card4", pile_played[3])
-            all_match=(pile_played[0].rank == pile_played[1].rank) and (
+            all_match = (pile_played[0].rank == pile_played[1].rank) and (
                 pile_played[1].rank == pile_played[2].rank) and (pile_played[2].rank == pile_played[3].rank)
         print("self.cards.pile_played[0].rank", self.cards.pile_played[0].rank,
               "self.state.burn_card", self.state.burn_card)
@@ -807,9 +812,8 @@ class Game(object):
         # now check they're all the same
         last_card = None
         for card in cards:
-            if last_card:
-                if not card.rank == last_card.rank:
-                    return False
+            if last_card and not card.rank == last_card.rank:
+                return False
             last_card = card
         return True
 
@@ -818,7 +822,8 @@ class Game(object):
            the user have ANY cards in the set cards_to_check which can be played
            on the current played stack, or can the cards in the user's play
            list be played on teh current played stack"""
-        logger.debug("__can_play_cards -> cards to check: %s", jsonpickle.encode(cards_to_check, unpicklable=False))
+        logger.debug("__can_play_cards -> cards to check: %s",
+                     jsonpickle.encode(cards_to_check, unpicklable=False))
 
         if not self.cards.pile_played:
             return True
@@ -828,12 +833,9 @@ class Game(object):
                 return self.__can_play_cards(self.cards.pile_played[:-1])
             else:
                 for card in cards_to_check:
-                    if card.rank in self.state.play_on_anything_cards:
-                        return True
-                    elif last_played_card.rank == self.state.less_than_card:
-                        if card.rank <= last_played_card.rank:
-                            return True
-                    elif card.rank >= last_played_card.rank:
+                    if (card.rank in self.state.play_on_anything_cards) or \
+                         (last_played_card.rank == self.state.less_than_card and card.rank <= last_played_card.rank) or \
+                         (card.rank >= last_played_card.rank):
                         return True
             return False
 
@@ -964,5 +966,5 @@ def get_list_of_games_for_this_user(player_id, include_game_ready=False, include
     games = c.execute(c.common_engine,
                       sql,
                       player_id=player_id,
-                      include_finished = include_finished)
+                      include_finished=include_finished)
     return games
