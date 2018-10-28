@@ -43,25 +43,25 @@ class Game(object):
     game_properties = {
         "special_cards": [
             {
-                "code": "less",
+                "code": "less_than_card",
                 "display": "Less than card",
                 "value": '7',
                 "play_on_anything": False
             },
             {
-                "code": "transparent",
+                "code": "transparent_card",
                 "display": "Transparent card",
                 "value": 'None',
                 "play_on_anything": True
             },
             {
-                "code": "burn",
+                "code": "burn_card",
                 "display": "Burn card",
                 "value": '10',
                 "play_on_anything": True
             },
             {
-                "code": "reset",
+                "code": "reset_card",
                 "display": "'Can play on anything' card",
                 "value": '2',
                 "play_on_anything": True
@@ -131,69 +131,45 @@ class Game(object):
         """parses a serialised configuraiton sent by the new game
            request and assigns the values to the game state object.
            Returns true or false depending on whether the process was successful"""
-        less_on_anything, transparent_on_anything, burn_on_anything, reset_on_anything = False, False, False, False
         list_of_special_cards = []
 
         for config_item in requested_config:
-            try:
-                name = config_item["name"]
-            except (KeyError, IndexError):
-                message = "Unable to read 'name' key in config_item"
+            name = config_item.get("name")
+            value = config_item.get("value")
+
+            if not name or not value:
+                message = "Unable to read 'name' or 'value' key in config_item"
                 return False, message
-            except:
-                raise
-            try:
-                value = config_item["value"]
-            except (KeyError, IndexError):
-                message = "Unable to read 'value' key in config_item"
-                return False, message
-            except:
-                raise
 
-            if name == "less-value":
-                self.state.less_than_card = self.__parse_int_from_json(value)
-            if name == "less-on-anything":
-                less_on_anything = True
-            if name == "transparent-value":
-                self.state.transparent_card = self.__parse_int_from_json(value)
-            if name == "transparent-on-anything":
-                transparent_on_anything = True
-            if name == "burn-value":
-                self.state.burn_card = self.__parse_int_from_json(value)
-            if name == "burn-on-anything":
-                burn_on_anything = True
-            if name == "reset-value":
-                self.state.reset_card = self.__parse_int_from_json(value)
-            if name == "reset-on-anything":
-                reset_on_anything = True
-            if name == "number-face-down":
-                self.number_face_down_cards = self.__parse_int_from_json(value, 3, 9)
-            if name == "number-hand":
-                self.state.number_hand_cards = self.__parse_int_from_json(value, 3, 9)
-            if name == "number-of-decks":
-                self.state.number_of_decks = self.__parse_int_from_json(value, 1, 2)
-            if name == "number-of-players":
-                self.state.number_of_players_requested = self.__parse_int_from_json(value, 2, 6)
+            values_to_parse_as_int = {"less_than_card":(1,13), 
+                                      "transparent_card":(1,13),
+                                      "burn_card":(1,13), 
+                                      "reset_card":(1,13), 
+                                      "number_face_down_cards":(1,9),
+                                      "number_hand_cards":(1,9),
+                                      "number_of_decks":(1,2),
+                                      "number_of_players_requested":(2,6)}
+            
+            values_to_parse_as_bool = {"less_than_card_on_anything":("less_than_card", False),
+                                       "transparent_card_on_anything":("transparent_card", False),
+                                       "burn_card_on_anything":("burn_card", False),
+                                       "reset_card_on_anything":("reset_card", False)}
 
-        if self.state.less_than_card > 0:
-            list_of_special_cards.append(self.state.less_than_card)
-        if self.state.transparent_card > 0:
-            list_of_special_cards.append(self.state.transparent_card)
-        if self.state.burn_card > 0:
-            list_of_special_cards.append(self.state.burn_card)
-        if self.state.reset_card > 0:
-            list_of_special_cards.append(self.state.reset_card)
+            if name in values_to_parse_as_int:
+                min, max = values_to_parse_as_int[name]
+                setattr(self.state, name, self.__parse_int_from_json(value, min, max))
 
-        # now parse the "play on anything" cards
-        self.state.play_on_anything_cards = []
-        if less_on_anything and self.state.less_than_card > 0:
-            self.state.play_on_anything_cards.append(self.state.less_than_card)
-        if transparent_on_anything and self.state.transparent_card > 0:
-            self.state.play_on_anything_cards.append(self.state.transparent_card)
-        if burn_on_anything and self.state.burn_card > 0:
-            self.state.play_on_anything_cards.append(self.state.burn_card)
-        if reset_on_anything and self.state.reset_card > 0:
-            self.state.play_on_anything_cards.append(self.state.reset_card)
+            if name in values_to_parse_as_bool and isinstance(value, bool):
+                key, _ = values_to_parse_as_bool[name] 
+                values_to_parse_as_bool[name] = (key, value)
+
+        # store a list of the "on everything" cards
+        for key, value in values_to_parse_as_bool:
+            parsed_value = getattr(self.state, key)
+            if parsed_value > 0:
+                list_of_special_cards.append(parsed_value)
+                if value:
+                    self.state.play_on_anything_cards.append(parsed_value)
 
         no_duplicates = len(list_of_special_cards) == len(set(list_of_special_cards))
         if no_duplicates:
