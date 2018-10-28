@@ -25,7 +25,7 @@
                 <label for='{{card_type.code}}-label"'>{{card_type.display}}</label>
             </div>
             <div class='col-1'>
-            <select class="form-control" id="{{card_type.code}}-value" name="{{card_type.code}}-value">
+            <select class="form-control" id="{{card_type.code}}" name="{{card_type.code}}">
             {% for card in game_options.all_cards %}
                 {% if card == card_type.value %}
                     <option selected='selected'>{{card}}</option>
@@ -38,11 +38,11 @@
             <div class='col-3'>
             <div class="form-check">
                 {% if card_type.play_on_anything == True %}
-                <input type="checkbox" class="form-check-input" name="{{card_type.code}}-on-anything" id="{{card_type.code}}-on-anything" checked>
+                <input type="checkbox" class="form-check-input" name="{{card_type.code}}_on_anything" id="{{card_type.code}}_on_anything" checked>
                 {% else %}
-                <input type="checkbox" class="form-check-input" id="{{card_type.code}}-on-anything" name="{{card_type.code}}-on-anything">
+                <input type="checkbox" class="form-check-input" id="{{card_type.code}}_on_anything" name="{{card_type.code}}_on_anything">
                 {% endif %}
-                <label class="custom-control-label" for="{{card_type.code}}-on-anything">Can play on anything</label>
+                <label class="custom-control-label" for="{{card_type.code}}_on_anything">Can play on anything</label>
             </div>
             </div>
 

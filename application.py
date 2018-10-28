@@ -10,8 +10,7 @@ from flask import (Flask, flash, jsonify, make_response, redirect,
                    render_template, request, session, url_for)
 from flask_sessionstore import Session
 from flask_sslify import SSLify
-#from sqlalchemy import create_engine
-#from sqlalchemy.orm import sessionmaker
+
 from werkzeug.exceptions import default_exceptions
 from werkzeug.security import check_password_hash, generate_password_hash
 
