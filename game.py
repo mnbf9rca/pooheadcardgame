@@ -126,6 +126,7 @@ class Game(object):
             raise ValueError(
                 f"Invalid value provided in requested configuration JSON: {min} < {val} < {max}")
         return val
+    
 
     def parse_requested_config(self, requested_config):
         """parses a serialised configuraiton sent by the new game
@@ -159,9 +160,10 @@ class Game(object):
                 min, max = values_to_parse_as_int[name]
                 setattr(self.state, name, self.__parse_int_from_json(value, min, max))
 
-            if name in values_to_parse_as_bool and isinstance(value, bool):
+            if name in values_to_parse_as_bool:
                 key, _ = values_to_parse_as_bool[name] 
-                values_to_parse_as_bool[name] = (key, value)
+                # bool is a subclasss of int with value 0 or 1
+                values_to_parse_as_bool[name] = (key, self.__parse_int_from_json(value, 0, 1))
 
         # store a list of the "on everything" cards
         for key, value in values_to_parse_as_bool:
@@ -171,10 +173,9 @@ class Game(object):
                 if value:
                     self.state.play_on_anything_cards.append(parsed_value)
 
+        message = "parsed successfully"
         no_duplicates = len(list_of_special_cards) == len(set(list_of_special_cards))
-        if no_duplicates:
-            message = "parsed successfully"
-        else:
+        if not no_duplicates:
             message = "duplicate special play cards"
         return no_duplicates, message
 
@@ -338,9 +339,8 @@ class Game(object):
         if not(self.state.game_id):
             self.state.game_id = int(result)
 
-        result = c.execute(
-            session, f"DELETE FROM game_cards WHERE game_id = {self.state.game_id} and player_id is null;")
-        if result == None:
+
+        if not c.execute(session, f"DELETE FROM game_cards WHERE game_id = {self.state.game_id} and player_id is null;"):
             # some kind of exception
             logger.error("unable to delete existing game cards")
             return False, "unable to delete existing game cards - rolling back"
@@ -353,9 +353,9 @@ class Game(object):
             logger.debug("saving pile_id %s", pile_id)
             relevant_pile = getattr(self.cards, self.Pile_Objects[pile_id])
 
-            for card in relevant_pile:
-                cards_to_store.append(
-                    f"({self.state.game_id}, NULL, {pile_id.value}, {card.suit}, {card.rank})")
+            cards_to_store.extend([ f"({self.state.game_id}, NULL, {pile_id.value}, {card.suit}, {card.rank})" for card in relevant_pile])
+            logger.debug("cards_to_store now includes: %s", cards_to_store)
+
 
         if cards_to_store:
             logger.debug("successfully identified game pile cards to save")
@@ -774,12 +774,16 @@ class Game(object):
         all_match = False
         if len(played_pile) > 3:
             pile_played = played_pile[-4:]
-            print("card1", pile_played[0], "card2", pile_played[1],
-                  "card3", pile_played[2], "card4", pile_played[3])
+            logger.debug("card1 %s, card2 %s, card3 %s, card4 %s", 
+                        pile_played[0], 
+                        pile_played[1],
+                        pile_played[2],
+                        pile_played[3])
             all_match = (pile_played[0].rank == pile_played[1].rank) and (
                 pile_played[1].rank == pile_played[2].rank) and (pile_played[2].rank == pile_played[3].rank)
-        print("self.cards.pile_played[0].rank", self.cards.pile_played[0].rank,
-              "self.state.burn_card", self.state.burn_card)
+        logger.debug("self.cards.pile_played[0].rank: %s, self.state.burn_card, %s",
+                     self.cards.pile_played[0].rank,
+                     self.state.burn_card)
         return ((self.cards.pile_played[-1].rank == self.state.burn_card) or
                 all_match)
 
@@ -840,13 +844,13 @@ class Game(object):
         if (allowed_actions["allowed_action"] == "swap" and
                 player.ID in allowed_actions["allowed_players"]):
 
-            print("ready to swap")
+            logger.debug("ready to swap")
             hand_cards = []
             face_cards = []
 
             for card in cards_to_swap:
                 card_index = int(card[2:])
-                print("swapping for index", card_index)
+                logger.debug("swapping for index %s", card_index)
                 card_type = Card_Types.Card_Type_From_Code.get(card[0])
                 if not card_type:
                     response = {'action': 'swap',
@@ -887,20 +891,20 @@ class Game(object):
         else:
             response = {'action': 'swap', 'action_result': False,
                         'action_message': 'You can\'t swap cards right now'}
-        print("swap response", jsonpickle.dumps(response, unpicklable=False))
+        logger.debug("swap response: %s", jsonpickle.dumps(response, unpicklable=False))
         return response
 
     def __load_cards_from_database(self, deck_type, game_id, session):
         """load a set of cards and return them in a sorted list"""
         c = common_db.Common_DB()
-        print("deck_type", deck_type, "game_id", game_id)
-        cards = c.execute(session, "SELECT card_suit, card_rank FROM game_cards WHERE game_id = :game_id AND card_location = :deck_type",
+        logger.debug(f"deck_type {deck_type}, game_id {game_id}")
+        cards = c.execute(session,
+                          "SELECT card_suit, card_rank FROM game_cards WHERE game_id = :game_id AND card_location = :deck_type",
                           game_id=game_id, deck_type=deck_type)
         cards_to_return = []
         if len(cards) > 0:
-            print(f"found {len(cards)} cards")
-            cards_to_return.extend(
-                [Card(card["card_suit"], card["card_rank"]) for card in cards])
+            logger.debug(f"found {len(cards)} cards")
+            cards_to_return.extend([Card(card["card_suit"], card["card_rank"]) for card in cards])
         return cards_to_return
 
 

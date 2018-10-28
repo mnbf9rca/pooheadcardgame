@@ -402,9 +402,9 @@ function lay_out_game_cards(number_of_cards, card_type, card_list = null) {
         for (let i = number_of_cards - 1, j = 0; i >= max_cards; i--) {
             let card_header = document.createElement("div");
             card_header.appendChild(document.createTextNode((j--).toString()));
-            card = card_list[i];
-            suit = card.suit;
-            rank = card.rank;
+            let card = card_list[i];
+            let suit = card.suit;
+            let rank = card.rank;
             let img = document.createElement("img");
             img.setAttribute("alt", describe_card(suit, rank));
             img.setAttribute("src", "/static/cards/" + get_card_key(suit, rank) + ".svg");
