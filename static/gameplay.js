@@ -173,7 +173,7 @@ function display_players(players_state, this_player_id, allowed_moves) {
 
 function display_player_cards(current_player, this_player_id, allowed_moves) {
     let game_row = $('#game-row');
-    this_player_div = document.createElement("div");
+    let this_player_div = document.createElement("div");
     this_player_div.className = "col";
     this_player_div.setAttribute('style', 'min-width:250px');
     this_player_div.setAttribute("id", "player" + current_player.player_id.toString());
@@ -332,10 +332,10 @@ function lay_out_cards_div(cards, card_type, player_id, number_in_hand = false, 
         else {
             child_div = document.createElement("div");
             child_div.className = "flex-div";
-            for (j = 0; j < cards.length; j++) {
-                card = cards[j];
-                suit = card.suit;
-                rank = card.rank;
+            for (let j = 0; j < cards.length; j++) {
+                let card = cards[j];
+                let suit = card.suit;
+                let rank = card.rank;
                 let img = document.createElement("img");
                 img.setAttribute("alt", describe_card(suit, rank));
                 img.setAttribute("src", "/static/cards/" + get_card_key(suit, rank) + ".svg");
@@ -366,8 +366,8 @@ function display_data_about_player(player) {
 };
 
 function display_game_cards(game_state) {
-    game_row = $('#game-row');
-    this_player_div = document.createElement("div");
+    let game_row = $('#game-row');
+    let this_player_div = document.createElement("div");
     this_player_div.className = "col";
     this_player_div.setAttribute("id", "game_info");
     let header = document.createTextNode("Game stacks");
