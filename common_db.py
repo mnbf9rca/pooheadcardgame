@@ -56,7 +56,6 @@ class Common_DB():
 
             self.__sqalchemy_database_uri = dburi
             self.__secret_key = sk
-            # self.__execution_only, self.__common_engine = database_connection.get_database_connection(self.__sqalchemy_database_uri)
             self.__logger.debug("creating common_engine")
             self.__common_engine = create_engine(self.__sqalchemy_database_uri)
             self.__logger.info("Created engine %s", self.__common_engine)
@@ -86,22 +85,18 @@ class Common_DB():
         def common_Sessionmaker(self):
             """returns a sqlalchemy.orm.session.Session"""
             return self.__common_Sessionmaker
-        #common_Session = property(__get_common_Session, doc="returns a sqlalchemy.orm.session.Session")
         
         @property
         def sqalchemy_database_uri(self):
             return self.__sqalchemy_database_uri
-        #sqalchemy_database_uri = property(__get_sqalchemy_database_uri)
 
         @property
         def common_engine(self):
             return self.__common_engine
-        #engine = property(__get_common_engine)
 
         @property
         def secret_key(self):
             return self.__secret_key
-        #secret_key = property(__get_secret_key)
 
         
         def initialise_models(self):
@@ -332,7 +327,6 @@ class Common_DB():
                 gcp = requests.get(metadata_server, headers=metadata_flavor).text
             except:
                 logger.info("Not in GCP - could not connect to %s", metadata_server)
-                pass
                 gcp = None
 
             try:

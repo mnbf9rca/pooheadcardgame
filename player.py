@@ -23,9 +23,9 @@ def get_player_for_username(username):
 
 
 class Player:
-    def __init__(self, ID):
+    def __init__(self, this_player_id):
         self.name = ""
-        self.ID = ID
+        self.ID = this_player_id
         self.face_down = []
         self.face_up = []
         self.hand = []
@@ -92,25 +92,6 @@ class Player:
                 f"error persisting cards for game_id '{game_id}' and player_id '{self.ID}' and card_type '{deck_type}''",)
         else:
             return result
-
-    def persist_player_cards_to_database_orm(self, session, game_id, deck_type, deck=[], *args) :
-        """save a given deck"""
-        # clear existing records
-
-        _ = session.query(Model_Card).\
-        filter(Model_Card.player_id == self.ID).\
-        filter(Model_Card.card_type == deck_type).\
-        filter(Model_Card.game_id == game_id).\
-        delete()
-
-        i = 0
-        player_cards = []
-        for card in deck:
-            player_cards.append(Model_Card(player_id = self.ID, game_id = game_id, card_type = deck_type, card_suit = card.suit, card_rank = card.rank, card_sequence = i) )
-        if player_cards:
-            session.add_all(player_cards)
-        print(f"done persisting cards for game_id '{game_id}' and player_id '{self.ID}' and card_type '{deck_type}''")
-        return
 
     def load_player_cards(self, session, game_id, deck_type):
         """queries the database for a set of cards for a given player and game and type ande returns as a set"""

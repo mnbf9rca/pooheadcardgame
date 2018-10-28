@@ -25,7 +25,7 @@ function enable_refresh_timer() {
 function check_state_change() {
     // stop timer to avoid race
     clearInterval(timer);
-    data = "get_checksum";
+    let data = "get_checksum";
     $.postJSON("/checkstate", data, function (result) {
         if (result["database_checksum"] != prior_database_checksum) {
             console.log("checksum changed");
@@ -66,12 +66,12 @@ $.postJSON = function (url, data, success, dataType) {
 };
 
 function submit_action(action) {
-    json_request = null;
+    let json_request = null;
     $('#alert-pane').remove();
     switch (action.toLowerCase()) {
         case "swap": {
             console.log("swap");
-            cards = identify_selected_cards();
+            let cards = identify_selected_cards();
             json_request = { "action": "swap", "action_cards": picked_cards };
             break;
         };
@@ -105,13 +105,10 @@ function submit_action(action) {
         }, 'json');
     };
 };
-process_submit = function (data, status, xml) {
-    console.log("data", data);
-};
 
 function identify_selected_cards() {
     // Retrieve the picker
-    picked_cards = [];
+    let picked_cards = [];
     $("select").each(function (i, obj) {
         picked_cards = picked_cards.concat($(obj).data('picker').selected_values());
     });
@@ -154,7 +151,7 @@ function render_game(result) {
     $('#player-id').html(info_text);
 
     // display player cards and return the current player's state as the return value
-    this_player = display_players(players_state, this_player_id, allowed_moves);
+    let this_player = display_players(players_state, this_player_id, allowed_moves);
     display_game_rules(state);
     display_data_about_player(this_player);
     display_game_cards(state);
@@ -164,8 +161,8 @@ function render_game(result) {
 function display_players(players_state, this_player_id, allowed_moves) {
     this_player = null;
     $('#game-row').empty();
-    for (i = 0; i < players_state.length; i++) {
-        player = players_state[i];
+    for (let i = 0; i < players_state.length; i++) {
+        let player = players_state[i];
         if (player.player_id == this_player_id) {
             this_player = player;
         }
@@ -175,12 +172,12 @@ function display_players(players_state, this_player_id, allowed_moves) {
 }
 
 function display_player_cards(current_player, this_player_id, allowed_moves) {
-    game_row = $('#game-row');
+    let game_row = $('#game-row');
     this_player_div = document.createElement("div");
     this_player_div.className = "col";
     this_player_div.setAttribute('style', 'min-width:250px');
     this_player_div.setAttribute("id", "player" + current_player.player_id.toString());
-    header = document.createTextNode("Player " + current_player.player_id.toString());
+    let header = document.createTextNode("Player " + current_player.player_id.toString());
     this_player_div.appendChild(header);
     this_player_div.appendChild(lay_out_cards(current_player.face_down_cards, "d", current_player.player_id, this_player_id, allowed_moves));
     this_player_div.appendChild(lay_out_cards(current_player.face_up_cards, "f", current_player.player_id, this_player_id, allowed_moves));
@@ -249,12 +246,12 @@ function lay_out_cards(cards, card_type, card_player_id, this_player_id, allowed
     if (!(allowed_moves === undefined || allowed_moves.length == 0)) {
         // this is this players cards
         // work out what the allowed move is
-        return_value = null;
+        let return_value = null;
         clearInterval(timer);
         switch (allowed_moves.allowed_action) {
             case "play": {
                 // allow the user to select only the type of card(s) they can play
-                allowed_cards = allowed_moves.allowed_cards;
+                let allowed_cards = allowed_moves.allowed_cards;
                 if (allowed_cards == card_type && allowed_moves.is_next_player && card_player_id == this_player_id) {
                     return_value = lay_out_cards_div(cards, card_type, card_player_id, number_in_hand, with_selector = true);
                 }
@@ -278,18 +275,9 @@ function lay_out_cards(cards, card_type, card_player_id, this_player_id, allowed
                 };
                 break;
             }
-            case "wait": {
-                return_value = lay_out_cards_div(cards, card_type, card_player_id, number_in_hand);
-                break;
-            };
-            case "pick": {
-                return_value = lay_out_cards_div(cards, card_type, card_player_id, number_in_hand);
-                break;
-            };
-            case "lost": {
-                return_value = lay_out_cards_div(cards, card_type, card_player_id, number_in_hand);
-                break;
-            };
+            case "wait": // same as 'finished' - lay out everything
+            case "pick": // same as 'finished' - lay out everything
+            case "lost": // same as 'finished' - lay out everything
             case "finished": {
                 return_value = lay_out_cards_div(cards, card_type, card_player_id, number_in_hand);
                 break;
@@ -309,7 +297,7 @@ function lay_out_cards(cards, card_type, card_player_id, this_player_id, allowed
 
 function add_action_button(button_text, clear_existing = true) {
     if (clear_existing) { $('#ready-to-play-info').empty(); }
-    $div = $('<div data-role="fieldcontain"/>');
+    let $div = $('<div data-role="fieldcontain"/>');
     $("<input type='button' value='" + button_text + "' id='action_button' />").appendTo($div.clone()).appendTo('#ready-to-play-info');
 };
 
@@ -324,15 +312,15 @@ function lay_out_cards_div(cards, card_type, player_id, number_in_hand = false, 
     card_div.append(child_div);
     if (!(cards === undefined || cards.length == 0)) {
         if (with_selector) {
-            select = document.createElement("select");
+            let select = document.createElement("select");
             select.setAttribute("multiple", "multiple");
             select.className = "image-picker show-html";
             select.setAttribute("id", "picker-" + card_type);
-            for (j = 0; j < cards.length; j++) {
-                card = cards[j];
-                suit = card.suit;
-                rank = card.rank;
-                option = document.createElement("option");
+            for (let j = 0; j < cards.length; j++) {
+                let card = cards[j];
+                let suit = card.suit;
+                let rank = card.rank;
+                let option = document.createElement("option");
                 // option.setAttribute("data-img-class","flex-card")
                 option.setAttribute("data-img-src", "/static/cards/" + get_card_key(suit, rank) + ".svg");
                 option.setAttribute("data-img-alt", describe_card(suit, rank));
@@ -410,7 +398,7 @@ function lay_out_game_cards(number_of_cards, card_type, card_list = null) {
     if ((number_of_cards) && (card_list)) {
         child_div = document.createElement("div");
         child_div.className = "flex-div";
-        max_cards = Math.max(number_of_cards - 4, 0);
+        let max_cards = Math.max(number_of_cards - 4, 0);
         for (i = number_of_cards - 1, j = 0; i >= max_cards; i--) {
             let card_header = document.createElement("div");
             card_header.appendChild(document.createTextNode((j--).toString()));
@@ -437,7 +425,7 @@ function lay_out_game_cards(number_of_cards, card_type, card_list = null) {
 function display_game_rules(state) {
     // populate game rules
     $('#game-rules').empty();
-    game_rules = "<p class='card-text no-margin'>Burn card: " + check_card(state.burn_card) + "</p>";
+    let game_rules = "<p class='card-text no-margin'>Burn card: " + check_card(state.burn_card) + "</p>";
     game_rules += "<p class='card-text no-margin'>Less than card: " + check_card(state.less_than_card) + "</p>";
     game_rules += "<p class='card-text no-margin'>Reset card: " + check_card(state.reset_card) + "</p>";
     game_rules += "<p class='card-text no-margin'>Transparent card: " + check_card(state.transparent_card) + "</p>";
@@ -469,6 +457,6 @@ function get_card_key(suit, rank) {
     if (rank in rank_short) {
         rank = rank_short[rank];
     };
-    card_image_name = rank.toString() + suits_short[suit].toString();
+    let card_image_name = rank.toString() + suits_short[suit].toString();
     return card_image_name;
 };

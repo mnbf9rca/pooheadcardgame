@@ -681,8 +681,6 @@ class Game(object):
                                     'action_result': False,
                                     'action_message': f'Cannot play that move on the current stack'}
 
-                    # return response
-                # response = {'action':'play', 'action_result':True}
             else:
                 response = {'action': 'play', 'action_result': False,
                             'action_message': "Select one or more cards to play"}
@@ -807,9 +805,8 @@ class Game(object):
         # now check they're all the same
         last_card = None
         for card in cards:
-            if last_card:
-                if not card.rank == last_card.rank:
-                    return False
+            if last_card and not card.rank == last_card.rank:
+                return False
             last_card = card
         return True
 
@@ -830,9 +827,8 @@ class Game(object):
                 for card in cards_to_check:
                     if card.rank in self.state.play_on_anything_cards:
                         return True
-                    elif last_played_card.rank == self.state.less_than_card:
-                        if card.rank <= last_played_card.rank:
-                            return True
+                    elif last_played_card.rank == self.state.less_than_card and card.rank <= last_played_card.rank:
+                        return True
                     elif card.rank >= last_played_card.rank:
                         return True
             return False
