@@ -6,7 +6,7 @@ gunicorn==19.9.0
 ItsDangerous==0.24
 jsonpickle==0.9.6
 psycopg2-binary==2.7.5
-requests==2.19.1
+requests==2.20.0
 SQLAlchemy==1.2.11
 sqlparse==0.2.4
 termcolor==1.1.0
