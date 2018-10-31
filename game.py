@@ -288,13 +288,8 @@ class Game(object):
         self.state.deal_done = True
         logger.debug("Deal done")
 
-    def save(self, session):
-        """saves the current state of the game, using a transaction to ensure
-           that we can roll back if not successful. If this is a new game
-           without an ID, it creates one, otherwise it updates the existing one"""
-        logger.info("beginning game save")
+    def write_state_to_database(self, session):
         c = common_db.Common_DB()
-
         if not self.state.game_id:
             logger.debug("save - no current game_id")
             querystring = "INSERT INTO games (game_finished, players_requested, game_ready_to_start, game_checksum, players_finished, play_on_anything_cards, play_order, less_than_card, transparent_card, burn_card, reset_card, number_of_decks, number_face_down_cards, number_hand_cards, current_turn_number, players_ready_to_start, deal_done) VALUES (:game_finished, :number_of_players_requested, :game_ready_to_start, :game_checksum, :players_finished, :play_on_anything_cards,:play_order,:less_than_card,:transparent_card,:burn_card,:reset_card,:number_of_decks,:number_face_down_cards,:number_hand_cards,:current_turn_number,:players_ready_to_start, :deal_done)"
@@ -339,21 +334,17 @@ class Game(object):
                                deal_done=self.state.deal_done,
                                game_id=self.state.game_id)
 
-        if not result:
-            logger.error("unable to save core game state")
-            return False, "unable to save core game state"
+        if result:
+            message = f"Game saved with ID {int(result)}"
+            if not(self.state.game_id):
+                self.state.game_id = int(result)
+        else:
+            message = "Unable to save game state"
 
-        if not(self.state.game_id):
-            self.state.game_id = int(result)
+        return result, message
 
-        result = c.execute(session, f"DELETE FROM game_cards WHERE game_id = {self.state.game_id} and player_id is null;")
-        if result == None:
-            # some kind of exception
-            logger.error("unable to delete existing game cards")
-            return False, "unable to delete existing game cards - rolling back"
-
+    def get_list_of_game_cards_to_store(self):
         cards_to_store = []
-
         for pile_id in self.Card_Pile_ID:
             # iterate through each pile ID
             # append the list of cards
@@ -362,28 +353,85 @@ class Game(object):
 
             cards_to_store.extend([ f"({self.state.game_id}, NULL, {pile_id.value}, {card.suit}, {card.rank})" for card in relevant_pile])
             logger.debug("cards_to_store now includes: %s", cards_to_store)
+        return cards_to_store
 
+    def store_game_cards(self, session):
+        cards_to_store = self.get_list_of_game_cards_to_store()
+        if not cards_to_store:
+            return True,  "no cards to store"
 
-        if cards_to_store:
-            logger.debug("successfully identified game pile cards to save")
-            cards_to_store = ", ".join(cards_to_store)
-            result = c.execute(
-                session, f"INSERT INTO game_cards (game_id, player_id, card_location, card_suit, card_rank) VALUES {cards_to_store};")
-            if not result:
-                logger.error("failed to save game cards, rolling back")
-                return False, "unable to save game cards"
-            else:
-                logger.debug("saved game cards")
+        logger.debug("starting to save game cards")
+        cards_to_store = ", ".join(cards_to_store)
+        result = c.execute(
+            session, f"INSERT INTO game_cards (game_id, player_id, card_location, card_suit, card_rank) VALUES {cards_to_store};")
+        if result:
+            message = "failed to store game gards, rolling back"
+            retval = False
+        else:
+            message = "saved game cards"
+            retval = True
+        return retval, message
 
+    def save_players(self, session):
         for player in self.players:
             logger.debug("saving player: %s", jsonpickle.dumps(player, unpicklable=True))
             save_result, message = player.save(session, self.state.game_id)
             if not save_result:
-                logger.error(message)
                 return False, message
             # store a reference to this player's object on the game itself
             if player.ID == self.state.this_player_id:
                 self.this_player = player
+        return True, "Players all saved successfully"
+
+    def delete_existing_game_cards(self, session):
+        result = c.execute(session, f"DELETE FROM game_cards WHERE game_id = {self.state.game_id} and player_id is null;")
+        if result == None:
+            # some kind of exception
+            message = "unable to delete existing game cards"
+            return False, message
+        return True, f"Old game cards removed from DB, {result} affected"
+
+    def save(self, session):
+        """saves the current state of the game, using a transaction to ensure
+           that we can roll back if not successful. If this is a new game
+           without an ID, it creates one, otherwise it updates the existing one"""
+        logger.info("beginning game save")
+        c = common_db.Common_DB()
+
+        write_state_result, message = self.write_state_to_database(session)
+
+        if not write_state_result:
+            logger.error(message)
+            return False, message
+        
+        # stored ok - log for debug
+        logger.debug(message)
+
+        delete_cards, message = self.delete_existing_game_cards(session)
+
+        if not delete_cards:
+            logger.error(message)
+            return False, message
+        
+        # stored ok - log for debug
+        logger.debug(message)
+
+        store_cards, message = self.store_game_cards(session)
+        if not store_cards:
+            logger.error(message)
+            return False, message
+        
+        # stored ok - log for debug
+        logger.debug(message)
+
+        player_save, message = self.save_players(session)
+        if not player_save:
+            logger.error(message)
+            return False, message
+
+        # stored ok - log for debug
+        logger.debug(message)
+
         # return the game_id for future use
         logger.debug("game saved successfully")
         return True, "game saved successfully"
