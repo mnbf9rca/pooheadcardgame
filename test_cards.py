@@ -1,12 +1,14 @@
-import cards
 import pytest
+
+import cards
+
 
 @pytest.fixture
 def all_cards_sorted():
     import cards
     return [cards.Card(s, r) for s in range(4) for r in range(13)]
 
-def test_Card_Types():
+def test_card_types():
     # these keys are critical to ensuring that the right cards
     # are restored to the correct place in the DB and game state
     # so we need to check that teh values dont get changed
@@ -79,4 +81,3 @@ def test_new_deck_is_shuffled(all_cards_sorted):
     sorted_all_card_keys = [card.card_key() for card in all_cards_sorted]
     deck_all_card_keys = [card.card_key() for card in d.cards]
     assert sorted_all_card_keys != deck_all_card_keys
-
