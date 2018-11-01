@@ -12,14 +12,12 @@ from models import Model_Card, Model_Player, Model_Player_Game
 
 
 def get_player_for_username(username):
-    login_session = common_db.Common_DB().common_Sessionmaker()
+    c = common_db.Common_DB()
+    result = c.execute(c.common_engine,
+                        "SELECT player_id, hash, is_admin FROM users WHERE username = :username",
+                        username = username)
 
-    query = login_session.query(Model_Player).filter(
-        Model_Player.username == username).order_by(Model_Player.player_id)
-
-    login_session.close()
-
-    return query
+    return result
 
 
 class Player:

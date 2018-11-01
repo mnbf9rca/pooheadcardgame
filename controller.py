@@ -22,14 +22,16 @@ def do_login(username, password):
     """checks the username and password. If valid returns the user's ID and whether they have admin rights or not"""
 
     query = get_player_for_username(username)
+    if not query or len(query) != 1 :
+        return None, None
 
-    if query.count() != 1 or not check_password_hash(query.first().hash, password):
+    query = query[0]
+
+    if not check_password_hash(query["hash"], password):
         return None, None
 
     else:
-        found_user = query.first()
-
-        return found_user.player_id, found_user.is_admin
+        return query["player_id"], query["is_admin"]
 
 
 def do_save_game(game):
