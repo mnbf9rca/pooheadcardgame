@@ -57,7 +57,7 @@ class Card(object):
     def card_key(self):
         """returns a 2 character key for the card"""
         card_rank = self.rank
-        if card_rank in Card.rank_short:
+        if card_rank > 9:
             card_rank = Card.rank_short[card_rank]
         card_image_name = str(card_rank) + Card.suits_short[self.suit]
         return card_image_name
@@ -86,8 +86,7 @@ class Deck(object):
         if (newgame):
             # we're asking for a newly shuffled deck for a new game
             for _ in range(number_of_decks):
-                self.cards.extend([Card(s, r)
-                                   for s in Card.suits for r in Card.ranks])
+                self.cards.extend([Card(s, r) for s in Card.suits for r in Card.ranks])
             self.shuffle()
 
     def shuffle(self):
