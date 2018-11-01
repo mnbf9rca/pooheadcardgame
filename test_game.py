@@ -34,7 +34,7 @@ def test_can_create_game_with_three_players(game_with_three_players):
     game = game_with_three_players
     assert len(game.players) == 3
 
-def test_first_player_plays(game_three_players_one_card_each):
+def test_first_player_plays_last_card(game_three_players_one_card_each):
     g = game_three_players_one_card_each
     expected_card = [g.this_player.face_down[0]]
     g.state.play_order = [1,2,3]
@@ -54,7 +54,7 @@ def test_first_player_plays(game_three_players_one_card_each):
         errors.append(f"player 1 not in g.state.players_finished: {g.state.players_finished}")
     assert not errors, "errors occured:\n{}".format("\n".join(errors))
 
-def test_second_player_plays(game_three_players_one_card_each):
+def test_second_player_plays_last_card(game_three_players_one_card_each):
     g = game_three_players_one_card_each
     expected_card = [g.this_player.face_down[0]]
     g.state.play_order = [1,2,3]
@@ -84,5 +84,7 @@ def test_second_player_plays(game_three_players_one_card_each):
         errors.append(f"player 2 not in g.state.players_finished: {g.state.players_finished}")
     if not g.state.game_finished:
         errors.append(f"g.state.finished != True")
+    if not g.state.play_order == [3]:
+        errors.append(f"play order doesnt equal [3]: {self.state.play_order}")
     print(jsonpickle.encode(g, unpicklable=False))
     assert not errors, "errors occured:\n{}".format("\n".join(errors))
