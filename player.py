@@ -27,7 +27,6 @@ class Player:
         self.face_down = []
         self.face_up = []
         self.hand = []
-        self.__db_object = None
 
     class Card_Pile_ID(Enum):
         PLAYER_FACE_DOWN = Card_Types.CARD_FACE_DOWN
@@ -58,38 +57,6 @@ class Player:
                           'face_down_cards': face_down_cards,
                           'hand_cards': hand_cards}
         return player_summary
-
-    def persist_player_cards_to_database(self, deck=[], *args, session, game_id, deck_type, trans_connection=None):
-        """save a given deck"""
-        # clear existing records
-        result = False
-        session.execute("DELETE FROM player_game_cards WHERE player_id = :player_id AND card_type=:card_type AND game_id = :game_id",
-                                    trans_connection=trans_connection,
-                                    player_id=self.ID,
-                                    card_type=deck_type,
-                                    game_id=game_id)
-        i = 0
-        cards = []
-        for card in deck:
-            cards.append(
-                f"({self.ID}, {game_id}, {deck_type}, {card.suit}, {card.rank}, {i})")
-            i += 1
-        if cards:
-            cards = ", ".join(cards)
-            result = session.execute(
-                f"INSERT INTO player_game_cards (player_id, game_id, card_type, card_suit, card_rank, card_sequence) VALUES {cards};",
-                trans_connection=trans_connection)
-        else:
-            # no cards - return true
-            result = True
-
-        if not result:
-            session.rollback()
-            session.close()
-            raise ValueError(
-                f"error persisting cards for game_id '{game_id}' and player_id '{self.ID}' and card_type '{deck_type}''",)
-        else:
-            return result
 
     def load_player_cards(self, session, game_id, deck_type):
         """queries the database for a set of cards for a given player and game and type ande returns as a set"""

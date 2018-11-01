@@ -6,6 +6,7 @@ from enum import Enum
 from random import shuffle
 from typing import List
 from zlib import crc32
+import jsonpickle
 
 import jsonpickle
 from sqlalchemy.ext.declarative import declarative_base
@@ -82,8 +83,11 @@ class Game(object):
         self.cards = self.Cards()
         self.state.this_player_id = this_player_id
         self.players = []
+        self.this_player = None
         if this_player_id:
-            self.players.append(Player(this_player_id))
+            this_player = Player(this_player_id)
+            self.this_player = this_player
+            self.players.append(this_player)
 
     def add_players_to_game(self, player_id, session):
         """Checks if there's enough space left in this game, and
@@ -546,7 +550,7 @@ class Game(object):
             response = {"allowed_action": action,
                         "action_message": message,
                         "allowed_players": players_still_to_swap}
-        elif (self.this_player.ID in self.state.play_order and
+        elif (self.state.this_player_id in self.state.play_order and
               len(self.state.play_order) < 2):
             # you;re the last player
             logger.debug("Only 1 player left, and it's this player")
@@ -559,13 +563,13 @@ class Game(object):
             response = {"allowed_action": "finished",
                         "action_message": f"Game over - player {self.state.play_order} lost"}
             self.state.game_finished = True
-        elif self.this_player.ID in self.state.players_finished:
+        elif self.state.this_player_id in self.state.players_finished:
             # this player finished, others havent
             logger.debug("This player finished, but others haven't")
             response = {"allowed_action": "wait",
                         "action_message": "You've finished - but others are still playing. Please wait.",
                         "allowed_players": players_still_not_finished}
-        elif self.this_player.ID in players_still_not_finished:
+        elif self.state.this_player_id in players_still_not_finished:
             # ok - so we've not finished the game overall
             # this player is still in play too
             # and everyone has swapped
@@ -573,7 +577,7 @@ class Game(object):
             # check if we're next or have to wait
             logger.debug("this player still not finished")
 
-            is_next_player = self.this_player.ID == self.state.play_order[0]
+            is_next_player = self.state.this_player_id == self.state.play_order[0]
             if is_next_player:
                 # can we actually play or do we have to pick up?
                 logger.debug("this player is the next player")
@@ -682,8 +686,7 @@ class Game(object):
                     allowed_actions["allowed_cards"])
 
                 # validate that these cards are in this user's hand and are all the same type (face down, up, hand)
-                response, message, validated_cards, card_type = self.__validate_cards_exist_in_type(
-                    cards_to_play, allowed_card_type)
+                response, message, validated_cards, card_type = self.__validate_cards_exist_in_type(cards_to_play, allowed_card_type)
                 if not response:
                     logger.debug("Cannot play: %s", message)
                     return {'action': 'play',
@@ -746,8 +749,8 @@ class Game(object):
 
         if (not self.this_player.face_down) and (not self.this_player.face_up) and (not self.this_player.hand):
             # has run out of cards. Game over (for them at least)!
-            logger.debug(f"Player {self.this_player.ID} has run out of cards")
-            self.state.players_finished.append(self.this_player.ID)
+            logger.debug(f"Player {self.state.this_player_id} has run out of cards")
+            self.state.players_finished.append(self.state.this_player_id)
             # skip checking or rotatiung player later
             just_run_out_of_cards = True
             # remove this player from play rder
@@ -788,6 +791,7 @@ class Game(object):
 
         card_types = [card_description[0] for card_description in cards_to_play]
         card_type = Card_Types.Card_Type_From_Code.get(card_types[0])
+        print("cards_to_play", jsonpickle.encode(cards_to_play, unpicklable=False))
 
         card_indexes = [int(card_description[2:]) for card_description in cards_to_play]
 
