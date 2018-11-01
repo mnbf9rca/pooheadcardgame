@@ -356,6 +356,7 @@ class Game(object):
         return cards_to_store
 
     def store_game_cards(self, session):
+        c = common_db.Common_DB()
         cards_to_store = self.get_list_of_game_cards_to_store()
         if not cards_to_store:
             return True,  "no cards to store"
@@ -384,12 +385,13 @@ class Game(object):
         return True, "Players all saved successfully"
 
     def delete_existing_game_cards(self, session):
+        c = common_db.Common_DB()
         result = c.execute(session, f"DELETE FROM game_cards WHERE game_id = {self.state.game_id} and player_id is null;")
         if result == None:
             # some kind of exception
             message = "unable to delete existing game cards"
             return False, message
-        return True, f"Old game cards removed from DB, {result} affected"
+        return True, f"Old game cards removed from DB, {result} records affected"
 
     def save(self, session):
         """saves the current state of the game, using a transaction to ensure
