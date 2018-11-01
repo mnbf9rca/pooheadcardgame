@@ -22,14 +22,16 @@ def do_login(username, password):
     """checks the username and password. If valid returns the user's ID and whether they have admin rights or not"""
 
     query = get_player_for_username(username)
+    if not query or len(query) != 1 :
+        return None, None
 
-    if query.count() != 1 or not check_password_hash(query.first().hash, password):
+    query = query[0]
+
+    if not check_password_hash(query["hash"], password):
         return None, None
 
     else:
-        found_user = query.first()
-
-        return found_user.player_id, found_user.is_admin
+        return query["player_id"], query["is_admin"]
 
 
 def do_save_game(game):
@@ -161,20 +163,21 @@ def do_playcards(request_json, game):
 
     cards = request_json.get("action_cards")
 
+    list_of_actions_which_require_cards = ["swap", "play"]
+    if action in list_of_actions_which_require_cards and not cards:
+        logger.error(f"do_playcards swap called wtih action '{action}' no cards specified to play")
+        response = {'action': action, 'action_result': False,
+                    'action_message': "no cards specified"}
+        return response
+
     # at least we've got a candidate action - let's reload the game state from teh database
     c = common_db.Common_DB()
     s = c.common_Sessionmaker()
     game.load(s)
 
     if action == "swap":
-        if not cards:
-            logger.error("do_playcards swap called wtih no cards specified to swap")
-            response = {'action': action, 'action_result': False,
-                        'action_message': "no cards specified"}
-        else:
-            # we have a action_cards object - submit to game
-            response = game.swap_cards(cards, game.this_player)
-            logger.debug("do_playcards swap: %s", response)
+        # we have a action_cards object - submit to game
+        response = game.swap_cards(cards, game.this_player)
 
     elif action == "no_swap":
         # player has opted to play without swapping
@@ -183,13 +186,7 @@ def do_playcards(request_json, game):
     elif action == "play":
         # play these cards
         logger.debug("do_playcards starting play")
-
-        if not cards:
-            response = {'action': action, 'action_result': False,
-                        'action_message': "no cards specified"}
-        else:
-            response = game.play_move(cards)
-        logger.debug("do_playcards play: %s", response)
+        response = game.play_move(cards)
 
     elif action == "pick":
         # player has to pick up the cards
@@ -200,21 +197,23 @@ def do_playcards(request_json, game):
         response = {'action': action, 'action_result': False,
                     'action_message': "unknown action :" + action}
 
-    if response["action_result"]:
-        # if any of the items above report success, save state
-        logger.debug("about to save game from do_playcards")
-        if game.save(s):
-            s.commit()
-            logger.debug("do_playcards saved game")
-        else:
-            s.rollback()
-            logger.error("do_playcards unable to save, transaction rolled back")
-            response = {'action': action, 'action_result': False,
-                        'action_message': "Unable to save game"}
+    logger.debug("do_playcards %s: %s", action, response)
+    if not response["action_result"]:
+        logger.error(response["action_message"])
+        s.rollback()
+        s.close
+        return response
+        
+    if game.save(s):
+        s.commit()
+        logger.debug("do_playcards saved game")
     else:
         s.rollback()
-    if s:
-        s.close()
+        logger.error("do_playcards unable to save, transaction rolled back")
+        response = {'action': action, 'action_result': False,
+                    'action_message': "Unable to save game"}
+
+    s.close()
     return response
 
 
