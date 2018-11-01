@@ -1,4 +1,5 @@
-# pooheadcardgame
+# pooheadcardgame  [![Build Status](https://travis-ci.org/mnbf9rca/pooheadcardgame.svg?branch=master)](https://travis-ci.org/mnbf9rca/pooheadcardgame)
+
 My implementation of the card game https://en.wikipedia.org/wiki/Shithead_(card_game)
 
 # Shithead

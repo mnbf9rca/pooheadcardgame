@@ -4,6 +4,7 @@ python:
 # command to install dependencies
 install:
   - pip install -r requirements.txt
+  - pip install -U pytest-cov
 
 # disable shallow clone
 git:
@@ -15,5 +16,5 @@ addons:
     token:
       secure: QlmNySQQDcHKNXOHduyQxwoSTh0tLpCuYGLWs7yOz8OOER2opYeIEg6JAcDhbbTCWwuwxvjaN6SsPvzoO3Ghk9NMofPYdGzfvkgELsHYyfC8fbvNn2NNfTT1g6EiLKRzq5NziWPWazW876bFaNsoS1rUpxdTx4oQ8aFxL3HRQE2G41GWoAHrw5UN2cyxHNzXFQCWLiBk/8/0u5/F7ZOlDE0m6mmv/ljbxUt8QLdcW9dQmdTti8i1GwunCwlTGCqT/XtWUCII8SLAuxRLYqk7Vq8Y2+hnJPbYURQB6gOjfv1qrn7oC6mOuPnf48e1dnsEzxg3wRSAGsJSuMzHpAAfZZ4ytRxs64yocXexDYNpfuGr6pDLvOBcX6QZgNq+nARhJC0iBEEq54kBmRhZqclqOVZKx33t8/EXAx5ktx9/ZxFFA3EPsy6JQbSvtlno2vSl31OE/me1HioR1ThjZ7vneCyZutqFqWRwexcH/bUCDKAlcIpVsmLhVm9GLIN2N3dm8X81XOHOhoL6BPWR9zcJII+Q2Q1M9JSGN1ZnGFgWcIAt5/W4OO3/uzVSgNOuO0ntoJ99NM2K0/tInqADdtbjJz3zEZ0PoKMQpDlrb+FiRT+tjJALv6R2/+SZCtLy5JY/E5onqxOYjLiAR/eIGPlYjCJwZnFM+hdTGw2amasEmlw=
 script:
-  - pytest -v
+  - pytest -v --cov --cov-report=xml:coverage.xml
   - sonar-scanner
