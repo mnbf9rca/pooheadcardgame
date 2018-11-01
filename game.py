@@ -396,7 +396,6 @@ class Game(object):
            that we can roll back if not successful. If this is a new game
            without an ID, it creates one, otherwise it updates the existing one"""
         logger.info("beginning game save")
-        c = common_db.Common_DB()
 
         write_state_result, message = self.write_state_to_database(session)
 

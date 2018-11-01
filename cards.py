@@ -1,7 +1,7 @@
 from random import shuffle
 
 
-class Card_Types:
+class Card_Types(object):
     CARD_FACE_DOWN = 1
     CARD_FACE_UP = 2
     CARD_HAND = 3
@@ -30,7 +30,7 @@ class Card_Types:
 
 
 
-class Card:
+class Card(object):
     """defines a playing card"""
 
     suits = {1: "hearts", 2: "diamonds", 3: "clubs", 4: "spades"}
@@ -75,7 +75,7 @@ class Card:
         return self.rank == other.rank and self.suit == other.suit
 
 
-class Deck:
+class Deck(object):
     """defines a deck of playing cards.
        by default a new deck is shuffled but optionally can be empty"""
 
