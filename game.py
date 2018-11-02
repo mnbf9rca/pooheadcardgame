@@ -87,7 +87,11 @@ class Game(object):
         if this_player_id:
             this_player = Player(this_player_id)
             self.this_player = this_player
-            self.players.append(this_player)
+            self.add_player(this_player)
+
+    def add_player(self, player):
+        self.players.append(player)
+        self.state.number_of_players_joined = len(self.players)
 
     def add_players_to_game(self, player_id, session):
         """Checks if there's enough space left in this game, and
@@ -102,8 +106,7 @@ class Game(object):
 
             player_to_add = Player(player_id)
 
-            self.players.append(player_to_add)
-            self.state.number_of_players_joined = len(self.players)
+            self.add_player(player_to_add)
             self.state.play_order = [player.ID for player in self.players]
             if self.save(session):
                 logger.debug("successfully added player to game")
@@ -791,8 +794,7 @@ class Game(object):
 
         card_types = [card_description[0] for card_description in cards_to_play]
         card_type = Card_Types.Card_Type_From_Code.get(card_types[0])
-        print("cards_to_play", jsonpickle.encode(cards_to_play, unpicklable=False))
-
+ 
         card_indexes = [int(card_description[2:]) for card_description in cards_to_play]
 
         if not card_type:

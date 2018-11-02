@@ -1,3 +1,4 @@
+#!/bin/bash
 if [[ -z "${SQLALCHEMY_DATABASE_PASSWORD}" ]]; then
     echo "SQLALCHEMY_DATABASE_PASSWORD is not set"
 elif [[ -z "${SQLALCHEMY_DATABASE_USERNAME}" ]]; then
