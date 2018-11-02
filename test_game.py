@@ -107,7 +107,7 @@ def test_second_player_plays_last_card_and_one_player_left(game_three_players_on
     print(jsonpickle.encode(g, unpicklable=False))
     assert not errors, "errors occured:\n{}".format("\n".join(errors))
 
-def test_create_new_game(standard_request_json):
+def test_create_new_game_from_request_json(standard_request_json):
     g = game.Game(1)
     print(standard_request_json)
     parsed_values, message = g.parse_requested_config(standard_request_json)
