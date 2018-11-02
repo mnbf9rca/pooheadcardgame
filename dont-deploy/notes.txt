@@ -5,7 +5,7 @@ in one window,
 in another,
 - run ./dont-deploy/run_flaskl.sh 
 
-
+docker postgres wiht persistence: https://ryaneschinger.com/blog/dockerized-postgresql-development-environment
 
 https://cloud.google.com/appengine/docs/flexible/python/quickstart
 

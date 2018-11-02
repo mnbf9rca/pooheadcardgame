@@ -54,7 +54,7 @@ def test_first_player_plays_last_card(game_three_players_one_card_each):
         errors.append(f"player 1 not in g.state.players_finished: {g.state.players_finished}")
     assert not errors, "errors occured:\n{}".format("\n".join(errors))
 
-def test_second_player_plays_last_card(game_three_players_one_card_each):
+def test_second_player_plays_last_card_and_one_player_left(game_three_players_one_card_each):
     g = game_three_players_one_card_each
     expected_card = [g.this_player.face_down[0]]
     g.state.play_order = [1,2,3]
