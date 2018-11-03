@@ -8,11 +8,13 @@ import cards
 
 @pytest.fixture
 def three_cards():
+    '''return a list of 3 specific cards'''
     c = [cards.Card(1,4), cards.Card(2,3), cards.Card(3,3)]
     return c
 
 @pytest.fixture
 def standard_request_json():
+    '''return a JSON which represents teh default when a user clicks new game'''
     standard_request = '[{"name":"less_than_card","value":"7"},'\
                     '{"name":"transparent_card","value":"None"},'\
                     '{"name":"transparent_card_on_anything","value":"on"},'\
@@ -30,6 +32,7 @@ def standard_request_json():
 
 @pytest.fixture
 def nonstandard_request_json():
+    '''return a non-standard JSON, with almost every value changed'''
     nonstandard_request = '[{"name":"less_than_card","value":"3"},'\
                     '{"name":"less_than_card_on_anything","value":"on"},'\
                     '{"name":"transparent_card","value":"5"},'\
@@ -47,12 +50,14 @@ def nonstandard_request_json():
 
 @pytest.fixture
 def request_with_three_players(standard_request_string):
+    '''change the standard JSON to request 3 players, not 2'''
     standard_request_json = standard_request_string.replace('{"name":"number_of_players_requested","value":"2"}',
                                                           '{"name":"number_of_players_requested","value":"3"}')
     return json.loads(standard_request_json)
 
 @pytest.fixture
 def game_with_three_players():
+    '''create a game with 3 active players'''
     g = game.Game(this_player_id=1, number_of_players = 3)
     for id in range(2, 4):
         g.add_player(player.Player(id))
@@ -60,6 +65,7 @@ def game_with_three_players():
 
 @pytest.fixture
 def game_three_players_one_card_each(game_with_three_players, three_cards):
+    ''' return a game with 3 players, each of which has 1 face_down card left, from three_cards fixture'''
     g = game_with_three_players
     g.state.deal_done = True
     g.state.game_ready_to_start = True
@@ -69,13 +75,16 @@ def game_three_players_one_card_each(game_with_three_players, three_cards):
     return g
 
 def test_can_create_game_with_no_players():
+    '''can create empty game'''
     assert len(game.Game().players) == 0
 
 def test_can_create_game_with_three_players(game_with_three_players):
+    '''do we get a game with 3 players'''
     game = game_with_three_players
     assert len(game.players) == 3
 
 def test_first_player_plays_last_card(game_three_players_one_card_each):
+    '''P1 plays last card, P2 and P3 are still playing'''
     g = game_three_players_one_card_each
     expected_card = [g.this_player.face_down[0]]
     g.state.play_order = [1,2,3]
@@ -98,6 +107,7 @@ def test_first_player_plays_last_card(game_three_players_one_card_each):
     assert not errors, "errors occured:\n{}".format("\n".join(errors))
 
 def test_second_player_plays_last_card_and_one_player_left(game_three_players_one_card_each):
+    '''What happens when P1 finishes, then P2 completes their game, but P3 has a card left'''
     g = game_three_players_one_card_each
     expected_card = [g.this_player.face_down[0]]
     g.state.play_order = [1,2,3]
@@ -130,13 +140,14 @@ def test_second_player_plays_last_card_and_one_player_left(game_three_players_on
         errors.append(f"g.state.finished != True")
     if not g.state.play_order == [3]:
         errors.append(f"play order doesnt equal [3]: {self.state.play_order}")
-    print(jsonpickle.encode(g, unpicklable=False))
+
     assert not errors, "errors occured:\n{}".format("\n".join(errors))
 
 def test_create_new_game_from_standard_request_json(standard_request_json):
+    '''can we create a new game from teh "default" json'''
     r = standard_request_json
     g = game.Game(1)
-    print(r)
+
     parsed_values, message = g.parse_requested_config(r)
     errors = []
     if not parsed_values:
@@ -184,9 +195,10 @@ def test_create_new_game_from_standard_request_json(standard_request_json):
 
 
 def test_create_new_game_non_standard_request_json(nonstandard_request_json):
+    '''check that a JSON with non-standard values is correctly parsed and loaded'''
     r = nonstandard_request_json
     g = game.Game(1)
-    print("nonstandard_request_json", r)
+
     parsed_values, message = g.parse_requested_config(r)
     errors = []
     if not parsed_values:
@@ -231,3 +243,62 @@ def test_create_new_game_non_standard_request_json(nonstandard_request_json):
         errors.append(f"game_finished != false: {g.state.game_finished}")
 
     assert not errors, "errors occured:\n{}".format("\n".join(errors))
+
+def test_do_deal_standard_game(standard_request_json):
+    ''' test that a standard game is correctly dealt, with the right number fo cards in each pile'''
+    r = standard_request_json
+    g = game.Game(1)
+ 
+    parsed_values, message = g.parse_requested_config(r)
+    g.deal()
+    errors = []
+
+    if not parsed_values:
+        errors.append(f"can't parse values: {message}")
+    if not g.state.deal_done == True:
+        errors.append("state not deal_done")
+    # check each player has 3 cards in hand
+    num_hand_cards = [len(p.hand) for p in g.players]
+    num_face_up_cards = [len(p.face_up) for p in g.players]
+    num_face_down = [len(p.face_down) for p in g.players]
+    if set(num_hand_cards) != {3}:
+        errors.append(f"hand cards not all 3: {num_hand_cards}")
+    if set(num_face_up_cards) != {3}:
+        errors.append(f"face up cards not all 3: {num_face_up_cards}")
+    if set(num_face_down) != {3}:
+        errors.append(f"face down cards not all 3: {num_face_down}")
+    assert not errors, "errors occured:\n{}".format("\n".join(errors))
+
+def test_rotate_players(game_with_three_players):
+    '''test that the game correctly rotates players on request'''
+    g = game_with_three_players
+    g.state.play_order = [1,2,3]
+    g.rotate_player()
+    assert g.state.play_order == [2,3,1]
+
+def test_work_out_who_plays_first(game_with_three_players):
+    '''test that we can check who should start based on lowest hand card, 
+       and that we rotate to that player'''
+    g = game_with_three_players
+    g.state.play_order = [1,2,3]
+    # give each 
+    g.players[0].add_cards_to_player_cards([cards.Card(1,6), cards.Card(1,4), cards.Card(1,5)], cards.Card_Types.CARD_HAND)
+    g.players[1].add_cards_to_player_cards([cards.Card(2,3), cards.Card(2,4), cards.Card(2,5)], cards.Card_Types.CARD_HAND)
+    g.players[2].add_cards_to_player_cards([cards.Card(3,6), cards.Card(3,4), cards.Card(3,5)], cards.Card_Types.CARD_HAND)
+    g.work_out_who_plays_first()
+    assert g.state.play_order == [2,3,1]
+
+def test_calculate_player_allowed_actions():
+    assert True
+
+def test_play_no_swap():
+    assert True
+
+def test_play_pick_up():
+    assert True
+
+def test_play_move():
+    assert True
+
+def test_swap_cards():
+    assert True
