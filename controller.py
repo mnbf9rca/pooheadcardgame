@@ -93,10 +93,8 @@ def do_add_to_game(game):
         message = "deal already done - can't add to game"
         action_result = False       
 
-    if not game.add_players_to_game(game.state.this_player_id, this_session):
-        message = "could not add you to the game"
-        action_result = False
-    else:
+    action_result, message = game.add_players_to_game(game.state.this_player_id)
+    if action_result:
         # added to the game. Check if the game is ready
         if game.ready_to_start:
             # do the deal

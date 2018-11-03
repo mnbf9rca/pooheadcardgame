@@ -288,6 +288,81 @@ def test_work_out_who_plays_first(game_with_three_players):
     g.work_out_who_plays_first()
     assert g.state.play_order == [2,3,1]
 
+def test_add_player_to_game_for_two():
+    '''check that we can add 2 players, and game is ready to start when we do'''
+    # 2 requested, one alrady
+    # 3 requestd, one alredy
+    # player already in game
+    errors = []
+    g = game.Game(1, [1])
+    if len(g.players) != 1:
+        errors.append("initial state of g.players != 1 player long")
+    print(len(g.players))
+    g.state.number_of_players_requested = 2
+
+    add_result, message = g.add_players_to_game(2)
+
+    if not add_result:
+        errors.append(message)
+    if not g.ready_to_start:
+        errors.append("doesn't seem to be ready to start")
+    if len(g.players) != 2:
+        errors.append("don't appear to have added anyone to player list")
+    
+    assert not errors, "errors occured:\n{}".format("\n".join(errors))
+
+def test_add_existing_player_to_game_for_two():
+    '''should refuse to add exisitng player to game'''
+    # 2 requested, one alrady
+    # 3 requestd, one alredy
+    # player already in game
+    errors = []
+    g = game.Game(1, [1])
+    if len(g.players) != 1:
+        errors.append("initial state of g.players != 1 player long")
+    print(len(g.players))
+    g.state.number_of_players_requested = 2
+    add_result, _ = g.add_players_to_game(1)
+    if add_result:
+        errors.append("added existing player to game")
+    if  g.ready_to_start:
+        errors.append("ready to start is true, but contains same 2 players")
+    if len(g.players) != 1:
+        errors.append("appear to have added anyone to player list")
+    
+    assert not errors, "errors occured:\n{}".format("\n".join(errors))
+
+def test_add_two_player_to_game_for_three():
+    '''check that we can add 3 players, and game is ready to start when we do'''
+    # 2 requested, one alrady
+    # 3 requestd, one alredy
+    # player already in game
+    errors = []
+    g = game.Game(1, [1])
+    if len(g.players) != 1:
+        errors.append("initial state of g.players != 1 player long")
+    print(len(g.players))
+    g.state.number_of_players_requested = 3
+
+    add_result, message = g.add_players_to_game(2)
+
+    if not add_result:
+        errors.append(message)
+    if g.ready_to_start:
+        errors.append("game ready to start with 2 of 3 players")
+    if len(g.players) != 2:
+        errors.append("don't appear that player list contains only 2 players")
+    add_result, message = g.add_players_to_game(3)
+
+    if not add_result:
+        errors.append(message)
+    if not g.ready_to_start:
+        errors.append("doesn't seem to be ready to start")
+    if len(g.players) != 3:
+        errors.append("don't appear to have added 3 players to list")
+    
+    assert not errors, "errors occured:\n{}".format("\n".join(errors))
+
 def test_calculate_player_allowed_actions():
     assert True
 
