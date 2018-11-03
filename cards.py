@@ -64,7 +64,10 @@ class Card(object):
 
     def __str__(self):
         """Return a description of the card name"""
-        return ((Card.ranks[self.rank]) + ' of ' + (Card.suits[self.suit]))
+        if self.rank == 1 and self.suit == 0:
+            return "Back of card"
+        else:
+            return ((Card.ranks[self.rank]) + ' of ' + (Card.suits[self.suit]))
 
     def __lt__(self, other):
         """less than"""

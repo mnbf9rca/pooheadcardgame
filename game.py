@@ -120,7 +120,7 @@ class Game(object):
                 ", or this player is already in the game")
             return False
 
-    def __parse_int_from_json(self, value_to_clean, min=0, max=13):
+    def __parse_int_from_json(self, value_to_clean, name, min=0, max=13):
         """takes a value sent from the jquery serialised form and returns an integer equivalent to a card rank"""
         if value_to_clean.lower() == "none":
             val = 0
@@ -131,7 +131,7 @@ class Game(object):
                 raise
         if (val > max) or (val < min):
             raise ValueError(
-                f"Invalid value provided in requested configuration JSON: {min} < {val} < {max}")
+                f"Invalid value provided in requested configuration JSON for {name}: {min} < {val} < {max}")
         return val
 
     def __parse_bool_from_json(self, value):
@@ -164,29 +164,22 @@ class Game(object):
                                       "number_of_decks":(1,2),
                                       "number_of_players_requested":(2,6)}
             
-            values_to_parse_as_bool = {"less_than_card_on_anything":("less_than_card", False),
-                                        "transparent_card_on_anything":("transparent_card", False),
-                                        "burn_card_on_anything":("burn_card", False),
-                                        "reset_card_on_anything":("reset_card", False)}
+            values_to_parse_as_bool = {"less_than_card_on_anything":"less_than_card",
+                                        "transparent_card_on_anything":"transparent_card",
+                                        "burn_card_on_anything":"burn_card",
+                                        "reset_card_on_anything":"reset_card"}
 
             if name in values_to_parse_as_int:
                 min, max = values_to_parse_as_int[name]
-                setattr(self.state, name, self.__parse_int_from_json(value, min, max))
+                setattr(self.state, name, self.__parse_int_from_json(value, name, min, max))
 
-            if name in values_to_parse_as_bool:
-                state_attribute, currentval = values_to_parse_as_bool[name] 
-                # bool is a subclasss of int with value 0 or 1
-                values_to_parse_as_bool[name] = (state_attribute, self.__parse_bool_from_json(value))
+            if name in values_to_parse_as_bool and self.__parse_bool_from_json(value):
+                list_of_special_cards.append(getattr(self.state, values_to_parse_as_bool[name]))
+                
+        while 0 in list_of_special_cards:
+            list_of_special_cards.remove(0)
 
-        # store a list of the "on everything" cards
-        for key in values_to_parse_as_bool:
-            state_attribute, value = values_to_parse_as_bool[key] 
-            parsed_value = getattr(self.state, state_attribute)
-            if parsed_value > 0:
-                list_of_special_cards.append(parsed_value)
-                if value:
-                    self.state.play_on_anything_cards.append(parsed_value)
-
+        self.state.play_on_anything_cards = list_of_special_cards
         message = "parsed successfully"
         no_duplicates = len(list_of_special_cards) == len(set(list_of_special_cards))
         if not no_duplicates:
