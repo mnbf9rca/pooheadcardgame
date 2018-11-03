@@ -44,17 +44,17 @@ class Player:
         # check if this is us - if so send our hand, otherwise send empty
         hand_cards = []
         if self.ID == player_id:
-            hand_cards = [str(c) for c in self.hand]
+            hand_cards = self.hand
         face_down_cards = []
-        face_down_cards.extend([str(Card(0, 1)) for i in range(len(self.face_down))])
+        face_down_cards.extend([Card(0, 1) for i in range(len(self.face_down))])
         player_summary = {'player_id': self.ID,
                           'number_face_down': len(self.face_down),
                           'number_face_up': len(self.face_up),
-                          'face_up_cards': [str(c) for c in self.face_up],
+                          'face_up_cards': self.face_up,
                           'number_in_hand': len(self.hand),
                           'face_down_cards': face_down_cards,
                           'hand_cards': hand_cards}
-        return str(player_summary)
+        return player_summary
 
     def load_player_cards(self, session, game_id, deck_type):
         """queries the database for a set of cards for a given player and game and type ande returns as a set"""

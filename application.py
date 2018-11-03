@@ -127,7 +127,7 @@ def load_game():
     if add:
         # would like to be added to this game
         app_logger.debug(
-            f"requesting /logged_in to add user to game with '{add}'")
+            f"requesting /logged_in to add user to game {game.state.game_id} for user '{add}'")
         action_result, message = controller.do_add_to_game(game)
         app_logger.debug(
             f"do_add_to_game returned {action_result} and message '{message}'")

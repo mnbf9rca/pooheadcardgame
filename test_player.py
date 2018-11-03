@@ -1,8 +1,11 @@
-import pytest
 import json
+
+import jsonpickle
+import pytest
 
 import cards
 import player
+
 
 @pytest.fixture
 def three_cards():
@@ -133,11 +136,12 @@ def test_get_cards_returns_correct_card(test_player_one_card_each_deck):
 
 def test_player_correctly_summarised(test_player_one_card_each_deck):
     p = test_player_one_card_each_deck
-    expected_summary = "{'player_id': 1, 'number_face_down': 1,"\
-                        " 'number_face_up': 1, "\
-                        "'face_up_cards': ['three of diamonds'], "\
-                        "'number_in_hand': 1, "\
-                        "'face_down_cards': ['Back of card'], "\
-                        "'hand_cards': ['three of clubs']}"
-
-    assert p.summarise(1) == expected_summary
+    expected_summary = '{"face_down_cards": [{"rank": 1, "suit": 0}], '\
+                        '"face_up_cards": [{"rank": 3, "suit": 2}], '\
+                        '"hand_cards": [{"rank": 3, "suit": 3}], '\
+                        '"number_face_down": 1, '\
+                        '"number_face_up": 1, '\
+                        '"number_in_hand": 1, '\
+                        '"player_id": 1}'
+                        
+    assert jsonpickle.encode(p.summarise(1), unpicklable=False) == expected_summary

@@ -365,7 +365,7 @@ class Game(object):
         cards_to_store = ", ".join(cards_to_store)
         result = c.execute(
             session, f"INSERT INTO game_cards (game_id, player_id, card_location, card_suit, card_rank) VALUES {cards_to_store};")
-        if result:
+        if not result:
             message = "failed to store game gards, rolling back"
             retval = False
         else:
@@ -698,7 +698,7 @@ class Game(object):
                 can_play_cards = self.__can_play_cards(validated_cards)
 
                 if can_play_cards:
-                    response = self.play_validated_cards(validated_cards, card_type)
+                    response = self.__play_validated_cards(validated_cards, card_type)
                 else:
                     if card_type == Card_Types.CARD_FACE_DOWN:
                         # tried to play a face down card but lost
@@ -722,7 +722,7 @@ class Game(object):
         self.__update_pile_sizes()
         return response
 
-    def play_validated_cards(self, validated_cards, card_type):
+    def __play_validated_cards(self, validated_cards, card_type):
         """plays a set of validated_cards of type card_type for the current player"""
         # great - play teh cards!
         response = {'action': 'play',
