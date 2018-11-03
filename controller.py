@@ -89,23 +89,25 @@ def do_add_to_game(game):
     # check whether this is allowed.
     c = common_db.Common_DB()
     this_session = c.common_Sessionmaker()
+    if game.state.deal_done:
+        message = "deal already done - can't add to game"
+        action_result = False       
 
-    if not game.add_players_to_game(game.state.this_player_id, this_session):
-        this_session.rollback()
-        message = "could not add you to the game"
-        action_result = False
-    else:
+    action_result, message = game.add_players_to_game(game.state.this_player_id)
+    if action_result:
         # added to the game. Check if the game is ready
         if game.ready_to_start:
             # do the deal
-            if not game.state.deal_done:
-                game.deal()
-                game.save(this_session)
-            message = "Added you to the game, and it's ready to play."
+            game.deal()
+            action_result, message = game.save(this_session)
         else:
-            message = "Added you to the game. Now sit tight and wait for enough other players to join."
-        action_result = True
+            action_result, message = game.save(this_session)
+            if action_result:
+                message = "Added you to the game. Now sit tight and wait for enough other players to join."
+    if action_result:
         this_session.commit()
+    else:
+        this_session.rollback()
     this_session.close()
 
     return action_result, message

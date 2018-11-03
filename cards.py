@@ -60,7 +60,7 @@ class Card(object):
         if card_rank > 9:
             card_rank = Card.rank_short[card_rank]
         card_image_name = str(card_rank) + Card.suits_short[self.suit]
-        return card_image_name
+        return str(card_image_name)
 
     def __str__(self):
         """Return a description of the card name"""

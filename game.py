@@ -93,32 +93,31 @@ class Game(object):
         self.players.append(player)
         self.state.number_of_players_joined = len(self.players)
 
-    def add_players_to_game(self, player_id, session):
+    def add_players_to_game(self, player_id):
         """Checks if there's enough space left in this game, and
            that this player is not already in the list,
            adds the selected player ID"""
 
         # check if a) number players < number requested
         # and this player is not already in the list of players
-        if (not self.ready_to_start and
-                len(list(set(player.ID for player in self.players) - set([player_id]))) == len(self.players)):
-            logger.debug("adding this player to the game")
+        if self.state.deal_done:
+            logger.error(f"cant add player {player_id} to game {self.state.game_id} - deal already done")
+            return False,  "deal already done - can't add to game"
+        if player_id in [player.ID for player in self.players]:
+            logger.error(f"cant add player {player_id} to game {self.state.game_id} - player already in game")
+            return False,  "you're already in the game"
+        if self.ready_to_start:
+            logger.error(f"cant add player {player_id} to game {self.state.game_id} - game.ready_to_start == True")
+            return False, "game already has enough players and is ready to start"
+        
+        logger.debug("adding this player to the game")
 
-            player_to_add = Player(player_id)
+        player_to_add = Player(player_id)
 
-            self.add_player(player_to_add)
-            self.state.play_order = [player.ID for player in self.players]
-            if self.save(session):
-                logger.debug("successfully added player to game")
-                return True
-            else:
-                logger.error("could not add player to game")
-                return False
-        else:
-            logger.error(
-                f"could not add player to game - either too many players (evaluates to: {self.ready_to_start})"
-                ", or this player is already in the game")
-            return False
+        self.add_player(player_to_add)
+        self.state.play_order = [player.ID for player in self.players]
+        return True, "added to game"
+
 
     def __parse_int_from_json(self, value_to_clean, name, min=0, max=13):
         """takes a value sent from the jquery serialised form and returns an integer equivalent to a card rank"""
@@ -198,7 +197,7 @@ class Game(object):
 
         def __init__(self, number_of_players):
 
-            self.number_of_players_requested = number_of_players
+            self.v = number_of_players
             self.number_of_players_joined = 0
             self.game_finished = False
             self.play_order = None
@@ -365,7 +364,7 @@ class Game(object):
         cards_to_store = ", ".join(cards_to_store)
         result = c.execute(
             session, f"INSERT INTO game_cards (game_id, player_id, card_location, card_suit, card_rank) VALUES {cards_to_store};")
-        if result:
+        if not result:
             message = "failed to store game gards, rolling back"
             retval = False
         else:
@@ -698,7 +697,7 @@ class Game(object):
                 can_play_cards = self.__can_play_cards(validated_cards)
 
                 if can_play_cards:
-                    response = self.play_validated_cards(validated_cards, card_type)
+                    response = self.__play_validated_cards(validated_cards, card_type)
                 else:
                     if card_type == Card_Types.CARD_FACE_DOWN:
                         # tried to play a face down card but lost
@@ -722,7 +721,7 @@ class Game(object):
         self.__update_pile_sizes()
         return response
 
-    def play_validated_cards(self, validated_cards, card_type):
+    def __play_validated_cards(self, validated_cards, card_type):
         """plays a set of validated_cards of type card_type for the current player"""
         # great - play teh cards!
         response = {'action': 'play',
