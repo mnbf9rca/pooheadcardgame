@@ -81,3 +81,16 @@ def test_new_deck_is_shuffled(all_cards_sorted):
     sorted_all_card_keys = [card.card_key() for card in all_cards_sorted]
     deck_all_card_keys = [card.card_key() for card in d.cards]
     assert sorted_all_card_keys != deck_all_card_keys
+
+def test_deal():
+    d = cards.Deck(newgame=True, number_of_decks=2)
+    top_card = (d.cards[len(d.cards)-1]).card_key
+    len_before = len(d)
+    deal = d.deal()
+    errors = []
+    if deal.card_key != top_card:
+        errors.append(f"deal.card_key == top_card: {deal.card_key}, {top_card}")
+    if len(d) != len_before -1 :
+        errors.append(f"len(d) != len_before -1: {len(d)}, {len_before}")
+    assert not errors, "errors occured:\n{}".format("\n".join(errors))
+
