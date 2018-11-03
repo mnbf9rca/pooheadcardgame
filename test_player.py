@@ -1,4 +1,5 @@
 import pytest
+import json
 
 import cards
 import player
@@ -102,5 +103,11 @@ def test_get_cards(test_player_one_card_each_deck):
 
 def test_summary(test_player_one_card_each_deck):
     p = test_player_one_card_each_deck
-    print(p.summarise(1))
-    assert 1==2
+    expected_summary = "{'player_id': 1, 'number_face_down': 1,"\
+                        " 'number_face_up': 1, "\
+                        "'face_up_cards': ['three of diamonds'], "\
+                        "'number_in_hand': 1, "\
+                        "'face_down_cards': ['Back of card'], "\
+                        "'hand_cards': ['three of clubs']}"
+
+    assert p.summarise(1) == expected_summary

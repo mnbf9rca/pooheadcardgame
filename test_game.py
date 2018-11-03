@@ -83,6 +83,8 @@ def test_first_player_plays_last_card(game_three_players_one_card_each):
     move_to_play = ["d-0"]
     play = g.play_move(move_to_play)
     errors = []
+    if not play["action_result"]:
+        errors.append(f"error from game.play_move: {play}")
     if len(g.cards.pile_played) != 1:
         errors.append(f"len(g.cards.pile_played) not equal to 1, actual length: {len(g.cards.pile_played)}")
     elif g.cards.pile_played != expected_card:
