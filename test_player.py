@@ -118,6 +118,16 @@ def test_add_card(test_player_one_card_each_deck):
         errors.append(f"cards.Card_Types.PLAYER_HAND != c_hand + c - player: {getattr(p, p.Pile_Objects[p.Card_Pile_ID.PLAYER_HAND])}, expected {c_hand + c}")
     assert not errors, "errors occured:\n{}".format("\n".join(errors))
     
+def test_add_invalid_card_type(test_player_one_card_each_deck):
+    p = test_player_one_card_each_deck
+    with pytest.raises(ValueError):
+        p.add_cards_to_player_cards([cards.Card(2,4)], cards.Card_Types.CARD_NONE)
+
+def test_remove_invalid_card_type(test_player_one_card_each_deck):
+    p = test_player_one_card_each_deck
+    with pytest.raises(ValueError):
+        p.remove_cards_from_player_cards([cards.Card(2,4)], cards.Card_Types.CARD_NONE)
+
 def test_get_cards_returns_correct_card(test_player_one_card_each_deck):
     p = test_player_one_card_each_deck
     c = [cards.Card(1,4), cards.Card(2,3), cards.Card(3,3)]
@@ -143,5 +153,6 @@ def test_player_correctly_summarised(test_player_one_card_each_deck):
                         '"number_face_up": 1, '\
                         '"number_in_hand": 1, '\
                         '"player_id": 1}'
-                        
+
     assert jsonpickle.encode(p.summarise(1), unpicklable=False) == expected_summary
+
