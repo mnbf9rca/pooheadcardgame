@@ -54,7 +54,7 @@ class Player:
                           'number_in_hand': len(self.hand),
                           'face_down_cards': face_down_cards,
                           'hand_cards': hand_cards}
-        return player_summary
+        return str(player_summary)
 
     def load_player_cards(self, session, game_id, deck_type):
         """queries the database for a set of cards for a given player and game and type ande returns as a set"""
