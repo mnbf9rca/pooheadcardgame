@@ -19,6 +19,11 @@ I built the back end in Python with SQLite as the database. The front end is bui
 
 In future I intend to replace the DBMS (e.g. move to Google Cloud SQL), optimise some of the SQL and database activities (e.g. simplify some queries, implement transactions etc.), add some play instructions, and host the game online at pooheadcardgame.com
 
+# deployment notes
+1. create postgresql in gcloud. Add a user and set a password
+2. set session_secret, sqlpassword, and sqlusername in gcloud > compute > metadata (https://console.cloud.google.com/compute/metadata)
+3. use gcloud app deploy to deploy
+
 ## LICENCE CREDITS
 
 # playing card images 
