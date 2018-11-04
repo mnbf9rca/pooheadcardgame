@@ -48,12 +48,6 @@ def nonstandard_request_json():
     print("nonstandard_request:", nonstandard_request)
     return json.loads(nonstandard_request)
 
-@pytest.fixture
-def request_with_three_players(standard_request_string):
-    '''change the standard JSON to request 3 players, not 2'''
-    standard_request_json = standard_request_string.replace('{"name":"number_of_players_requested","value":"2"}',
-                                                          '{"name":"number_of_players_requested","value":"3"}')
-    return json.loads(standard_request_json)
 
 @pytest.fixture
 def game_with_three_players():
@@ -193,6 +187,18 @@ def test_create_new_game_from_standard_request_json(standard_request_json):
 
     assert not errors, "errors occured:\n{}".format("\n".join(errors))
 
+def test_duplicate_special_values_in_request_json(standard_request_json):
+    '''check we detect duplicate special cards'''
+    r = standard_request_json
+    for item in r:
+        if item["name"] == "transparent_card":
+            item["value"] = "7"
+    print(r)
+    g = game.Game(1)
+
+    parsed_values, _ = g.parse_requested_config(r)
+
+    assert not parsed_values, "allowed addition of duplicate special play cards"
 
 def test_create_new_game_non_standard_request_json(nonstandard_request_json):
     '''check that a JSON with non-standard values is correctly parsed and loaded'''
@@ -308,6 +314,53 @@ def test_add_player_to_game_for_two():
         errors.append("doesn't seem to be ready to start")
     if len(g.players) != 2:
         errors.append("don't appear to have added anyone to player list")
+    
+    assert not errors, "errors occured:\n{}".format("\n".join(errors))
+
+def test_add_player_to_game_for_two_which_is_full():
+    '''check that we can add 2 players, and game is ready to start when we do'''
+    # 2 requested, one alrady
+    # 3 requestd, one alredy
+    # player already in game
+    errors = []
+    g = game.Game(1, [1])
+    if len(g.players) != 1:
+        errors.append("initial state of g.players != 1 player long")
+    print(len(g.players))
+    g.state.number_of_players_requested = 2
+
+    _, _ = g.add_players_to_game(2)
+    add_result, _ = g.add_players_to_game(3)
+
+    if  add_result:
+        errors.append("seem to have added player 3 to game where only 2 requested")
+    if len(g.players) != 2:
+        errors.append("seems to be > 2 players...")
+    
+    assert not errors, "errors occured:\n{}".format("\n".join(errors))
+
+def test_add_player_to_game_for_two_which_is_after_deal():
+    '''check that we can add 2 players, and game is ready to start when we do'''
+    # 2 requested, one alrady
+    # 3 requestd, one alredy
+    # player already in game
+    errors = []
+    g = game.Game(1, [1])
+    if len(g.players) != 1:
+        errors.append("initial state of g.players != 1 player long")
+    print(len(g.players))
+    g.state.number_of_players_requested = 2
+
+    _, _ = g.add_players_to_game(2)
+    g.deal()
+    g.state.number_of_players_requested = 3
+    add_result, _ = g.add_players_to_game(3)
+
+   
+    if  add_result:
+        errors.append("seem to have added player 3 to game after deal is done")
+    if len(g.players) != 2:
+        errors.append("seems to be > 2 players...")
     
     assert not errors, "errors occured:\n{}".format("\n".join(errors))
 

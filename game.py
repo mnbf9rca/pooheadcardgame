@@ -145,6 +145,7 @@ class Game(object):
            request and assigns the values to the game state object.
            Returns true or false depending on whether the process was successful"""
         list_of_special_cards = []
+        list_of_play_on_anything_cards = []
 
         for config_item in requested_config:
             name = config_item.get("name")
@@ -163,6 +164,11 @@ class Game(object):
                                       "number_of_decks":(1,2),
                                       "number_of_players_requested":(2,6)}
             
+            values_to_save_as_special_cards = ["less_than_card", 
+                                                "transparent_card",
+                                                "burn_card", 
+                                                "reset_card"]
+            
             values_to_parse_as_bool = {"less_than_card_on_anything":"less_than_card",
                                         "transparent_card_on_anything":"transparent_card",
                                         "burn_card_on_anything":"burn_card",
@@ -170,19 +176,29 @@ class Game(object):
 
             if name in values_to_parse_as_int:
                 min, max = values_to_parse_as_int[name]
-                setattr(self.state, name, self.__parse_int_from_json(value, name, min, max))
+                v = self.__parse_int_from_json(value, name, min, max)
+                # check if this is a "special" card
+                if name in values_to_save_as_special_cards:
+                    list_of_special_cards.append(v)
+                setattr(self.state, name, v)
 
+            # compile list of cards which can play on anything
             if name in values_to_parse_as_bool and self.__parse_bool_from_json(value):
-                list_of_special_cards.append(getattr(self.state, values_to_parse_as_bool[name]))
+                list_of_play_on_anything_cards.append(getattr(self.state, values_to_parse_as_bool[name]))
                 
+        
         while 0 in list_of_special_cards:
             list_of_special_cards.remove(0)
 
-        self.state.play_on_anything_cards = list_of_special_cards
+        while 0 in list_of_play_on_anything_cards:
+            list_of_play_on_anything_cards.remove(0)
+
+        self.state.play_on_anything_cards = list_of_play_on_anything_cards
         message = "parsed successfully"
+        print(list_of_special_cards)
         no_duplicates = len(list_of_special_cards) == len(set(list_of_special_cards))
         if not no_duplicates:
-            message = "duplicate special play cards"
+            message = "Special cards can only be assigned once."
         return no_duplicates, message
 
     def __are_there_enough_players_to_start(self):
