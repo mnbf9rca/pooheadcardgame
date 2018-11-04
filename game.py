@@ -241,6 +241,8 @@ class Game(object):
             self.pile_played_size = 0
             self.pile_deck_size = 0
 
+        '''
+        REMOVED
         @property
         def all_special_cards(self):
             """returns all special cards"""
@@ -255,7 +257,7 @@ class Game(object):
 
             cards = set(cards)
             return cards
-
+        '''
     class Cards(object):
         """stores cards separately from state to keep secret from client"""
 
