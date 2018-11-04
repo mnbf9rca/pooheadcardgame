@@ -63,13 +63,26 @@ def game_with_three_players():
 
 @pytest.fixture
 def game_three_players_one_card_each(game_with_three_players, three_cards):
-    ''' return a game with 3 players, each of which has 1 face_down card left, from three_cards fixture'''
+    ''' return a game with 3 players, each of which has 1 face_down card left, 
+        from three_cards fixture - P1 Card(1, 4), P2 Card(2, 3), P3 Card(3, 3)'''
     g = game_with_three_players
     g.state.deal_done = True
     g.state.game_ready_to_start = True
     player_cards = three_cards
     for player in g.players:
         player.face_down = [player_cards.pop()]
+    return g
+
+def swap_to_player(game, player_id):
+    g = game
+    if not player_id in [p.ID for p in g.players]:
+        raise ValueError("Requested player ID not in game")
+    else:
+        i = 0
+        while not g.this_player.ID == player_id:
+            g.this_player = g.players[i]
+            g.state.this_player_id = g.this_player.ID
+            i += 1
     return g
 
 
@@ -82,6 +95,150 @@ def test_can_create_game_with_three_players(game_with_three_players):
     '''do we get a game with 3 players'''
     game = game_with_three_players
     assert len(game.players) == 3
+
+
+def test_cant_play_no_swap_twice(game_with_three_players):
+    '''P1 plays no_swap then plays it again'''
+    g = game_with_three_players
+    g.state.play_order = [1, 2, 3]
+    g.state.number_of_players_requested = 3
+    g.deal()
+    g.state.this_player_id = 1
+
+    errors = []
+    response = g.play_no_swap()
+    # should be ok this time
+    if not response['action_result']:
+        errors.append(response['action_message'])
+    response = g.play_no_swap()
+    # should fail this time
+    if response['action_result']:
+        errors.append(response['action_message'])
+    assert not errors, "errors occured:\n{}".format("\n".join(errors))
+
+
+def test_never_require_pick_up_cards_from_face_down(game_three_players_one_card_each):
+    '''P1 should not be able to pick up when they only have face down cards'''
+    # P1 Card(1, 4), P2 Card(2, 3), P3 Card(3, 3)
+    hand_cards = [cards.Card(1, 4), cards.Card(2, 3), cards.Card(3, 3)]
+
+    g = game_three_players_one_card_each
+    g.players[1].hand.append(hand_cards.pop())
+    g.players[2].face_up.append(hand_cards.pop())
+    g.state.number_of_players_requested = 3
+    g.state.deal_done = True
+    g.state.ready_to_play = [1, 2, 3]
+    g.state.players_ready_to_start = [1, 2, 3]
+    # create a played pile which P1 cannot beat
+    g.cards.pile_played = [cards.Card(3, 9)]
+    print(jsonpickle.encode(g, unpicklable=False))
+
+    g.state.play_order = [1, 2, 3]
+    g.state.this_player_id = 1
+    play_result = g.play_pick_up()
+    print(play_result)
+    # expecting this to be accepted as P1 can always play (only has a hand card left)
+
+    assert not play_result['action_result'], f"play_pick_up succeeded even but should always play face down cards: {play_result['action_message']}"
+
+
+def test_reject_pick_up_cards_when_can_beat_with_hand(game_three_players_one_card_each):
+    '''P2 should not be able to pick up because they can beat the pile card'''
+    # P1 Card(1, 4), P2 Card(2, 3), P3 Card(3, 3)
+    hand_cards = [cards.Card(1, 4), cards.Card(2, 3), cards.Card(3, 3)]
+
+    g = game_three_players_one_card_each
+    g.players[1].hand.append(hand_cards.pop())
+    g.players[2].face_up.append(hand_cards.pop())
+    g.state.number_of_players_requested = 3
+    g.state.deal_done = True
+    g.state.ready_to_play = [1, 2, 3]
+    g.state.players_ready_to_start = [1, 2, 3]
+    # create a played pile which P2 can beat
+    g.cards.pile_played = [cards.Card(3, 3)]
+    print(jsonpickle.encode(g, unpicklable=False))
+
+    errors = []
+    g.state.play_order = [2, 3, 1]
+    g = swap_to_player(g, 2)
+
+    play_result = g.play_pick_up()
+    print(play_result)
+    # expecting this to be rejected as P2 can beat the card
+            
+    assert not play_result['action_result'], f"play_pick_up succeeded even though we can beat the card: {play_result['action_message']}"
+
+def test_allow_pick_up_cards_when_cannot_beat_with_hand(game_three_players_one_card_each):
+    '''P2 should not be able to pick up because they can beat the pile card'''
+    # P1 Card(1, 4), P2 Card(2, 3), P3 Card(3, 3)
+    hand_cards = [cards.Card(1, 4), cards.Card(2, 3), cards.Card(3, 3)]
+
+    g = game_three_players_one_card_each
+    g.players[1].hand.append(hand_cards.pop())
+    g.players[2].face_up.append(hand_cards.pop())
+    g.state.number_of_players_requested = 3
+    g.state.deal_done = True
+    g.state.ready_to_play = [1, 2, 3]
+    g.state.players_ready_to_start = [1, 2, 3]
+    # create a played pile which P2 can't beat
+    g.cards.pile_played = [cards.Card(3, 9)]
+    print(jsonpickle.encode(g, unpicklable=False))
+
+    g.state.play_order = [2, 3, 1]
+    g = swap_to_player(g, 2)
+    play_result = g.play_pick_up()
+    print(play_result)
+    # expecting this to be rejected as P2 can beat the card
+            
+    assert play_result['action_result'], f"play_pick_up failed even though we can't beat it: {play_result['action_message']}"
+
+def test_reject_pick_up_cards_when_cannot_beat_with_face_up(game_three_players_one_card_each):
+    '''P2 should not be able to pick up because they can beat the pile card with a face up card'''
+    # P1 Card(1, 4), P2 Card(2, 3), P3 Card(3, 3)
+    hand_cards = [cards.Card(1, 4), cards.Card(2, 3), cards.Card(3, 3)]
+
+    g = game_three_players_one_card_each
+    g.players[1].hand.append(hand_cards.pop())
+    g.players[2].face_up.append(hand_cards.pop())
+    g.state.number_of_players_requested = 3
+    g.state.deal_done = True
+    g.state.ready_to_play = [1, 2, 3]
+    g.state.players_ready_to_start = [1, 2, 3]
+    # create a played pile which P3 can beat
+    g.cards.pile_played = [cards.Card(3, 3)]
+    print(jsonpickle.encode(g, unpicklable=False))
+
+    g.state.play_order = [3, 1, 2]
+    g = swap_to_player(g, 3)
+    play_result = g.play_pick_up()
+    print(play_result)
+    # expecting this to be acepted as P3 can beat this card with their face up card
+            
+    assert not play_result['action_result'], f"play_pick_up succeeded even though we can beat it: {play_result['action_message']}"
+
+def test_allow_pick_up_cards_when_can_beat_with_face_up(game_three_players_one_card_each):
+    '''P2 should not be able to pick up because they can beat the pile card with a face up card'''
+    # P1 Card(1, 4), P2 Card(2, 3), P3 Card(3, 3)
+    hand_cards = [cards.Card(1, 4), cards.Card(2, 3), cards.Card(3, 3)]
+
+    g = game_three_players_one_card_each
+    g.players[1].hand.append(hand_cards.pop())
+    g.players[2].face_up.append(hand_cards.pop())
+    g.state.number_of_players_requested = 3
+    g.state.deal_done = True
+    g.state.ready_to_play = [1, 2, 3]
+    g.state.players_ready_to_start = [1, 2, 3]
+    # create a played pile which P3 can beat
+    g.cards.pile_played = [cards.Card(3, 3)]
+    print(jsonpickle.encode(g, unpicklable=False))
+
+    g.state.play_order = [3, 1, 2]
+    g = swap_to_player(g, 3)
+    play_result = g.play_pick_up()
+    print(play_result)
+    # expecting this to be acepted as P3 can beat this card with their face up card
+            
+    assert not play_result['action_result'], f"play_pick_up succeeded even though we can beat it: {play_result['action_message']}"
 
 
 def test_first_player_plays_last_card(game_three_players_one_card_each):

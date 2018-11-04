@@ -651,18 +651,27 @@ class Game(object):
 
     def play_no_swap(self):
         """plays the move 'dont swap, ready to start' at the beginning of the game"""
+        if self.state.this_player_id in self.state.players_ready_to_start:
+            logger.error("player attempted to play_no_swap but they've already done it")
+            return {'action': 'no_swap', 
+                    'action_result': False,
+                    'action_message': 'you have already committed without swapping'}
         logger.debug("play_no_swap -> adding user to players_ready_to_start")
+
         self.state.players_ready_to_start.append(self.state.this_player_id)
         if self.ready_to_start:
             logger.debug("play_no_swap -> ready_to_start")
             self.work_out_who_plays_first()
-        return {'action': 'no_swap', 'action_result': True}
+        return {'action': 'no_swap',
+                'action_result': True,
+                'action_message': 'ok'}
 
     def play_pick_up(self):
         """picks up the cards from the played stack and puts them in the player's hand"""
         response = {'action': 'pick', 'action_result': False,
                     'action_message': "You are not allowed to pick up cards right now"}
         allowed_actions = self.calculate_player_allowed_actions()
+
         if (allowed_actions["allowed_action"] == "pick" and
                 allowed_actions["is_next_player"]):
             # we're allowed to pick up cards right now
@@ -671,7 +680,7 @@ class Game(object):
         else:
             logger.debug("Not allowed to pick up right now")
             response = {'action': 'pick', 'action_result': False,
-                        'action_message': "Could not pick up - either not an allowed move, or it's not your turn"}
+                        'action_message': f"Could not pick up - either not an allowed move (allowed: {allowed_actions['allowed_action']}), or it's not your turn (your turn: {allowed_actions.get('is_next_player', 'not present')})"}
         return response
 
     def __pick_up_cards(self):
@@ -696,7 +705,7 @@ class Game(object):
         # play
         allowed_actions = self.calculate_player_allowed_actions()
         logger.debug("allowed_actions: %s", allowed_actions)
-        if (allowed_actions["allowed_action"] == "play" and allowed_actions["is_next_player"] == True):
+        if (allowed_actions["allowed_action"] == "play" and allowed_actions["is_next_player"]):
             if cards_to_play:
                 logger.debug("play_move -> allowed 'play' -> has cards_to_play")
                 allowed_card_type = Card_Types.Card_Type_From_Code.get(
