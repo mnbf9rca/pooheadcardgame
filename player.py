@@ -131,7 +131,7 @@ class Player:
             self.face_up = list(set(self.face_up) - set(cards_to_remove))
         else:
             raise ValueError(
-                f"Tried to add cards to unknown hand '{card_type}'")
+                f"Tried to remove cards from unknown hand '{card_type}'")
 
     def get_cards(self, card_type):
         if card_type == Card_Types.CARD_HAND:

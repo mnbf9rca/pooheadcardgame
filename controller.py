@@ -4,6 +4,7 @@ import os
 from urllib.parse import quote_plus
 
 import jsonpickle
+import requests
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -16,6 +17,67 @@ from models import (Base, Model_Card, Model_Game, Model_Player,
 from player import Model_Player, Player, get_player_for_username
 
 logger = logging.getLogger(__name__)
+
+
+def check_if_in_gcp():
+    logger = logging.getLogger(__name__)
+    metadata_server = "http://metadata.google.internal/computeMetadata/v1/instance/"
+    metadata_flavor = {'Metadata-Flavor': 'Google'}
+    logger.debug("about to test access to %s", metadata_server)
+    try:
+        # let's try and fetch metadata from the google cloud internal metadata server
+        # if this fails, then we're probably running locally
+        return requests.get(metadata_server, headers=metadata_flavor).text
+    except:
+        logger.info("Not in GCP - could not connect to %s", metadata_server)
+        return False
+
+
+def get_key_from_metadata_or_env(key, metadata_server):
+    logger = logging.getLogger(__name__)
+    if metadata_server:
+        logger.info(f"fetching '{key}' from '{metadata_server}'")
+        metadata_flavor = {'Metadata-Flavor': 'Google'}
+        return requests.get( metadata_server + key, headers=metadata_flavor).text
+
+    logger.info(f"fetching '{key}' from os.environ")
+    return os.environ.get(key)
+
+def get_config():
+    """attempts to fetch username and password from google metadata
+    server. If it can't do that, it attempts to retrieve them from
+    environment variables.
+    """
+    logger = logging.getLogger(__name__)
+    logger.info("fetching sql credentials")
+    username, password, secret_key = None, None, None
+    in_gcp = check_if_in_gcp()
+
+    # allow fatal error if not present
+    SQLALCHEMY_DATABASE_URI = os.environ['SQLALCHEMY_DATABASE_URI']
+    AUTH0_CALLBACK_URL = os.environ['AUTH0_CALLBACK_URL']
+    AUTH0_DOMAIN = os.environ['AUTH0_DOMAIN']
+
+    # fail silently
+    AUTH0_AUDIENCE = os.environ.get('AUTH0_AUDIENCE')
+
+    # only in gcp...
+    METADATA_SERVER = os.environ.get("GCP_METADATA_SERVER")
+
+    if in_gcp and not METADATA_SERVER:
+        raise KeyError("in GCP but can't find METADATA_SERVER env variable")
+
+    AUTH0_CLIENT_ID = get_key_from_metadata_or_env("AUTH0_CLIENT_ID", METADATA_SERVER)
+    AUTH0_CLIENT_SECRET = get_key_from_metadata_or_env("AUTH0_CLIENT_SECRET", METADATA_SERVER)
+    SQLALCHEMY_DATABASE_USERNAME = get_key_from_metadata_or_env("SQLALCHEMY_DATABASE_USERNAME", METADATA_SERVER)
+    SQLALCHEMY_DATABASE_PASSWORD = get_key_from_metadata_or_env("SQLALCHEMY_DATABASE_PASSWORD", METADATA_SERVER)
+    SECRET_KEY = get_key_from_metadata_or_env("SECRET_KEY", METADATA_SERVER)
+
+    SQLALCHEMY_DATABASE_URI = SQLALCHEMY_DATABASE_URI.replace('<creds>', SQLALCHEMY_DATABASE_USERNAME + ":" + SQLALCHEMY_DATABASE_PASSWORD)
+    logger.info(
+        f"Fetched SQLALCHEMY_DATABASE_PASSWORD: {password is None}, SQLALCHEMY_DATABASE_USERNAME: {username}, SECRET_KEY: {secret_key is None}")
+    return in_gcp, SQLALCHEMY_DATABASE_URI, SECRET_KEY, AUTH0_CLIENT_ID, AUTH0_CLIENT_SECRET, AUTH0_AUDIENCE, AUTH0_CALLBACK_URL, AUTH0_DOMAIN
+
 
 
 def do_login(username, password):

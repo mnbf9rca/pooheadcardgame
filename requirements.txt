@@ -12,3 +12,5 @@ sqlparse==0.2.4
 termcolor==1.1.0
 urllib3==1.23
 Werkzeug==0.14.1
+Authlib==0.10
+six==1.4.1

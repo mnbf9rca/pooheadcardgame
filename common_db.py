@@ -1,7 +1,7 @@
 import datetime
 import decimal
 import logging
-import os
+
 import re
 import sys
 import warnings
@@ -26,11 +26,11 @@ class Common_DB():
     """
 
     instance = None
-    def __new__(cls): # __new__ always a classmethod
+    def __new__(cls, database_connection_string = None, secret_key = None): # __new__ always a classmethod
         # logging.getLogger(__name__).debug("call to Common_DB()")
         if not Common_DB.instance:
             logging.getLogger(__name__).info("creating new Common_DB.instance")
-            Common_DB.instance = Common_DB.__Controller()
+            Common_DB.instance = Common_DB.__Controller(database_connection_string, secret_key)
         return Common_DB.instance
     def __getattr__(self, name):
         return getattr(self.instance, name)
@@ -41,7 +41,7 @@ class Common_DB():
         __sqalchemy_database_uri = None
         __secret_key = None
         __logger = None
-        def __init__(self):
+        def __init__(self, database_connection_string, secret_key):
             """initiates Controller to fetch SQL connection details and instantiate a single engine connection.
             
             properties:
@@ -52,10 +52,11 @@ class Common_DB():
             """
             self.__logger = logging.getLogger(__name__)
             self.__logger.debug("init Common_DB.__Controller()")
-            in_gcp, dburi, sk = self.get_sql_username_password()
 
-            self.__sqalchemy_database_uri = dburi
-            self.__secret_key = sk
+            #in_gcp, dburi, sk = self.get_sql_username_password()
+
+            self.__sqalchemy_database_uri = database_connection_string
+            self.__secret_key = secret_key
             self.__logger.debug("creating common_engine")
             self.__common_engine = create_engine(self.__sqalchemy_database_uri)
             self.__logger.info("Created engine %s", self.__common_engine)
@@ -309,59 +310,4 @@ class Common_DB():
             # Default
             return str(e)
 
-        @staticmethod
-        def get_sql_username_password():
-            """attempts to fetch username and password from google metadata
-            server. If it can't do that, it attempts to retrieve them from
-            environment variables.
-            """
-            logger = logging.getLogger(__name__)
-            logger.info("fetching sql credentials")
-            username, password, secret_key = None, None, None
-            metadata_server = "http://metadata.google.internal/computeMetadata/v1/instance/"
-            metadata_flavor = {'Metadata-Flavor': 'Google'}
-            logger.debug("about to test access to %s", metadata_server)
-            try:
-                # let's try and fetch metadata from the google cloud internal metadata server
-                # if this fails, then we're probably running locally
-                gcp = requests.get(metadata_server, headers=metadata_flavor).text
-            except:
-                logger.info("Not in GCP - could not connect to %s", metadata_server)
-                gcp = None
 
-            try:
-                logger.debug("about to try to fetch SQLALCHEMY_DATABASE_URI from os.environ")
-                sqlalchemy_database_uri = os.environ['SQLALCHEMY_DATABASE_URI']
-            except:
-                logger.error("unable to fetch SQLALCHEMY_DATABASE_URI from os.environ")
-                raise
-
-            if gcp:
-                # we're in google cloud
-                # fetch sql username and password from metadata
-                metadata_server = "http://metadata/computeMetadata/v1/project/attributes/"
-                in_gcp = True
-                try:
-                    logger.info("Fetching metadata from %s", metadata_server)
-                    password = requests.get(
-                        metadata_server + 'sqlpassword', headers=metadata_flavor).text
-                    username = requests.get(
-                        metadata_server + 'sqlusername', headers=metadata_flavor).text
-                    secret_key = requests.get(
-                        metadata_server + 'session_secret', headers=metadata_flavor).text
-                except:
-                    pass
-            else:
-                # not in GCP
-                # find credentials from environment variable
-                in_gcp = False
-                try:
-                    logger.info("fetching credentials from os.environ")
-                    password = os.environ.get('SQLALCHEMY_DATABASE_PASSWORD')
-                    username = os.environ.get('SQLALCHEMY_DATABASE_USERNAME')
-                    secret_key = os.environ.get('SECRET_KEY')
-                except:
-                    pass
-            sqlalchemy_database_uri = sqlalchemy_database_uri.replace('<creds>', username + ":" + password)
-            logger.info(f"Fetched SQLALCHEMY_DATABASE_PASSWORD: {password is None}, SQLALCHEMY_DATABASE_USERNAME: {username}, SECRET_KEY: {secret_key is None}")
-            return in_gcp, sqlalchemy_database_uri, secret_key

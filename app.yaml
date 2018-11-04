@@ -21,9 +21,12 @@ network:
   name: default
 
 env_variables:
-    # mysql --> SQLALCHEMY_DATABASE_URI: >-
-    #   mysql+pymysql://<creds>@/poohead?unix_socket=/cloudsql/pooheadcardgame:europe-west1:poohead-db
     SQLALCHEMY_DATABASE_URI: postgresql+psycopg2://<creds>@/poohead?host=/cloudsql/pooheadcardgame:europe-west1:pooheadpstgres
+    METADATA_SERVER:  "http://metadata/computeMetadata/v1/project/attributes/"
+    AUTH0_CALLBACK_URL: "https://pooheadcardgame.com/callback"
+    AUTH0_DOMAIN: "cynexia.eu.auth0.com"
+    AUTH0_AUDIENCE: ""
+
 
 beta_settings:
     # mysql --> cloud_sql_instances: pooheadcardgame:europe-west1:poohead-db

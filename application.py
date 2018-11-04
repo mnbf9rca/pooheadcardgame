@@ -1,18 +1,21 @@
 import json
 import logging
 import os
+from functools import wraps
 from tempfile import mkdtemp
 from urllib.parse import quote_plus
 
 import jsonpickle
 import requests
+from authlib.flask.client import OAuth
 from flask import (Flask, flash, jsonify, make_response, redirect,
                    render_template, request, session, url_for)
 from flask_sessionstore import Session
 from flask_sslify import SSLify
-
-from werkzeug.exceptions import default_exceptions
+from six.moves.urllib.parse import urlencode
+from werkzeug.exceptions import HTTPException, default_exceptions
 from werkzeug.security import check_password_hash, generate_password_hash
+import constants
 
 import common_db
 import controller
@@ -23,6 +26,7 @@ from game import (Game, get_list_of_games_for_this_user,
 # from https://github.com/cs50/python-cs50
 from helpers import apology, login_required
 from player import Player
+
 app_logger = logging.getLogger(__name__)
 app_logger.info("startup")
 
@@ -34,21 +38,24 @@ sslify = SSLify(app, permanent=True)
 # Environment variables are defined in app.yaml.
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# get config items
+in_gcp, SQLALCHEMY_DATABASE_URI, SECRET_KEY, AUTH0_CLIENT_ID, AUTH0_CLIENT_SECRET, AUTH0_AUDIENCE, AUTH0_CALLBACK_URL, AUTH0_DOMAIN = controller.get_config()
 
+AUTH0_BASE_URL = 'https://' + AUTH0_DOMAIN
+if AUTH0_AUDIENCE is '':
+    AUTH0_AUDIENCE = AUTH0_BASE_URL + '/userinfo'
 
-c = common_db.Common_DB()
+c = common_db.Common_DB(SQLALCHEMY_DATABASE_URI, SECRET_KEY)
 app_logger.info("got db engine %s", c.common_engine)
 c.initialise_models()
 app_logger.debug("models initialised")
 
-sqalchemy_database_uri = c.sqalchemy_database_uri
-secret_key = c.secret_key
-if sqalchemy_database_uri and secret_key:
-    app.config['SQLALCHEMY_DATABASE_URI'] = sqalchemy_database_uri
-    app.config['SECRET_KEY'] = secret_key
+if SQLALCHEMY_DATABASE_URI and SECRET_KEY:
+    app.config['SQLALCHEMY_DATABASE_URI'] = SQLALCHEMY_DATABASE_URI
+    app.config['SECRET_KEY'] = SECRET_KEY
 else:
     raise ValueError(
-        "Cannot load database connection details - sqalchemy_database_uri, secret_key missing")
+        "Cannot load database connection details - SQLALCHEMY_DATABASE_URI, secret_key missing")
 
 app.config["SESSION_PERMANENT"] = True
 
@@ -63,15 +70,52 @@ Session(app)
 # Ensure templates are auto-reloaded
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 
+oauth = OAuth(app)
+
+auth0 = oauth.register(
+    'auth0',
+    client_id=AUTH0_CLIENT_ID,
+    client_secret=AUTH0_CLIENT_SECRET,
+    api_base_url=AUTH0_BASE_URL,
+    access_token_url=AUTH0_BASE_URL + '/oauth/token',
+    authorize_url=AUTH0_BASE_URL + '/authorize',
+    client_kwargs={
+        'scope': 'openid profile',
+    },
+)
+
+def requires_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("PROFILE_KEY"):
+            return redirect('/login')
+        return f(*args, **kwargs)
+
+    return decorated
+
+
 # Ensure responses aren't cached
-
-
 @app.after_request
 def after_request(response):
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     response.headers["Expires"] = 0
     response.headers["Pragma"] = "no-cache"
     return response
+
+
+@app.route('/callback')
+def callback_handling():
+    auth0.authorize_access_token()
+    resp = auth0.get('userinfo')
+    userinfo = resp.json()
+
+    session["JWT_PAYLOAD"] = userinfo
+    session["PROFILE_KEY"] = {
+        'user_id': userinfo['sub'],
+        'name': userinfo['name'],
+        'picture': userinfo['picture']
+    }
+    return redirect('/dashboard')
 
 
 @app.route("/")
@@ -86,7 +130,8 @@ def index():
 
 
 @app.route("/logged_in")
-@login_required
+#@login_required
+@requires_auth
 def logged_in():
     app_logger.debug("call to /logged_in")
     # user is logged in, check for an active game
@@ -103,7 +148,8 @@ def logged_in():
 
 
 @app.route("/load_game")
-@login_required
+#@login_required
+@requires_auth
 def load_game():
     app_logger.debug("call to /load_game")
     game_id = request.args.get("game_id")
@@ -146,7 +192,8 @@ def load_game():
 
 
 @app.route("/playcards", methods=["POST"])
-@login_required
+#@login_required
+@requires_auth
 def play_cards():
     # TODO --> need to build the front end to start sending these
     # find out the action
@@ -171,7 +218,8 @@ def play_cards():
 
 
 @app.route("/checkstate", methods=["GET", "POST"])
-@login_required
+#@login_required
+@requires_auth
 def checkstate():
     """ returns the latest checksum recorded for this game in the database,
         and the latest held in game state in session """
@@ -182,7 +230,8 @@ def checkstate():
 
 
 @app.route("/getgamestate")
-@login_required
+#@login_required
+@requires_auth
 def getgamestate():
     """returns a JSON object to caller with a summary of the current
        state of the game, excluding sensitive information such as
@@ -196,6 +245,7 @@ def getgamestate():
 
 
 @app.route("/game_internals")
+@requires_auth
 @admin_user_required
 def game_internals():
     game = session["game"]
@@ -212,7 +262,8 @@ def game_internals():
 
 
 @app.route("/startnewgame", methods=["GET", "POST"])
-@login_required
+#@login_required
+@requires_auth
 def startnewgame():
     if request.method == "POST":
         # tehy have sent the new game definition
@@ -247,7 +298,8 @@ def startnewgame():
 
 
 @app.route("/play")
-@login_required
+#@login_required
+@requires_auth
 def play():
     # if no game, start a new one
     if session["game_id"] == None:
@@ -259,6 +311,10 @@ def play():
         return render_template("play.html")
 
 
+@app.route('/login')
+def login():
+    return auth0.authorize_redirect(redirect_uri=AUTH0_CALLBACK_URL, audience=AUTH0_AUDIENCE)
+'''
 @app.route("/login", methods=["GET", "POST"])
 def login():
     """Log user in"""
@@ -292,8 +348,9 @@ def login():
     # User reached route via GET (as by clicking a link or via redirect)
     else:
         return render_template("login.html")
+'''
 
-
+'''
 @app.route("/logout")
 def logout():
     """Log user out"""
@@ -305,7 +362,13 @@ def logout():
 
     # Redirect user to login form
     return redirect(url_for("login"))
+'''
 
+@app.route('/logout')
+def logout():
+    session.clear()
+    params = {'returnTo': url_for('home', _external=True), 'client_id': AUTH0_CLIENT_ID}
+    return redirect(auth0.api_base_url + '/v2/logout?' + urlencode(params))
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
@@ -350,6 +413,11 @@ def register():
     else:
         return render_template("register.html")
 
+@app.errorhandler(Exception)
+def handle_auth_error(ex):
+    response = jsonify(message=str(ex))
+    response.status_code = (ex.code if isinstance(ex, HTTPException) else 500)
+    return response
 
 def errorhandler(e):
     """Handle error"""
