@@ -15,7 +15,7 @@ from flask_sslify import SSLify
 from six.moves.urllib.parse import urlencode
 from werkzeug.exceptions import HTTPException, default_exceptions
 from werkzeug.security import check_password_hash, generate_password_hash
-import constants
+
 
 import common_db
 import controller

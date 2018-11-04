@@ -11,6 +11,11 @@ https://cloud.google.com/appengine/docs/flexible/python/quickstart
 
 testing localo
 
+travis to sonar:
+https://medium.com/@proustibat/using-sonarcloud-with-travis-ci-to-measure-and-continuously-improve-code-quality-5ea7fb5a587b
+
+https://pypi.org/project/travis-encrypt/
+https://docs.travis-ci.com/user/encryption-keys/
 
 grant all on all tables in schema public to mac;
 grant all on all sequences in schema public to mac;
