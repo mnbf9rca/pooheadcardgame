@@ -21,7 +21,7 @@ from cards import Card, Deck
 from game import (Game, get_list_of_games_for_this_user,
                   get_list_of_games_looking_for_players, get_users_for_game)
 # from https://github.com/cs50/python-cs50
-from helpers import apology, login_required, lookup
+from helpers import apology, login_required
 from player import Player
 app_logger = logging.getLogger(__name__)
 app_logger.info("startup")
