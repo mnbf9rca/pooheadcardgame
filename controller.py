@@ -89,9 +89,7 @@ def do_add_to_game(game):
     # check whether this is allowed.
     c = common_db.Common_DB()
     this_session = c.common_Sessionmaker()
-    if game.state.deal_done:
-        message = "deal already done - can't add to game"
-        action_result = False       
+   
 
     action_result, message = game.add_players_to_game(game.state.this_player_id)
     if action_result:
