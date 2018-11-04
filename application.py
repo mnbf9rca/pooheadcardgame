@@ -115,7 +115,7 @@ def callback_handling():
         'name': userinfo['name'],
         'picture': userinfo['picture']
     }
-    return redirect('/dashboard')
+    return redirect('/logged_in')
 
 
 @app.route("/")
