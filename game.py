@@ -241,23 +241,6 @@ class Game(object):
             self.pile_played_size = 0
             self.pile_deck_size = 0
 
-        '''
-        REMOVED
-        @property
-        def all_special_cards(self):
-            """returns all special cards"""
-            cards = []
-            cards.append(self.transparent_card)
-            cards.append(self.less_than_card)
-            cards.append(self.burn_card)
-            cards.append(self.reset_card)
-
-            while 0 in cards:
-                cards.remove(0)
-
-            cards = set(cards)
-            return cards
-        '''
     class Cards(object):
         """stores cards separately from state to keep secret from client"""
 
@@ -305,7 +288,7 @@ class Game(object):
         self.state.deal_done = True
         logger.debug("Deal done")
 
-    def write_state_to_database(self, session):
+    def __write_state_to_database(self, session):
         c = common_db.Common_DB()
         if not self.state.game_id:
             logger.debug("save - no current game_id")
@@ -360,7 +343,7 @@ class Game(object):
 
         return result, message
 
-    def get_list_of_game_cards_to_store(self):
+    def __get_list_of_game_cards_to_store(self):
         cards_to_store = []
         for pile_id in self.Card_Pile_ID:
             # iterate through each pile ID
@@ -372,10 +355,11 @@ class Game(object):
             logger.debug("cards_to_store now includes: %s", cards_to_store)
         return cards_to_store
 
-    def store_game_cards(self, session):
+    def __store_game_cards(self, session):
         c = common_db.Common_DB()
-        cards_to_store = self.get_list_of_game_cards_to_store()
+        cards_to_store = self.__get_list_of_game_cards_to_store()
         if not cards_to_store:
+            logger.debug("no cards to store")
             return True,  "no cards to store"
 
         logger.debug("starting to save game cards")
@@ -390,7 +374,7 @@ class Game(object):
             retval = True
         return retval, message
 
-    def save_players(self, session):
+    def __save_players(self, session):
         for player in self.players:
             logger.debug("saving player: %s", jsonpickle.dumps(player, unpicklable=True))
             save_result, message = player.save(session, self.state.game_id)
@@ -401,7 +385,7 @@ class Game(object):
                 self.this_player = player
         return True, "Players all saved successfully"
 
-    def delete_existing_game_cards(self, session):
+    def __delete_existing_game_cards(self, session):
         c = common_db.Common_DB()
         result = c.execute(session, f"DELETE FROM game_cards WHERE game_id = {self.state.game_id} and player_id is null;")
         if result == None:
@@ -416,7 +400,7 @@ class Game(object):
            without an ID, it creates one, otherwise it updates the existing one"""
         logger.info("beginning game save")
 
-        write_state_result, message = self.write_state_to_database(session)
+        write_state_result, message = self.__write_state_to_database(session)
 
         if not write_state_result:
             logger.error(message)
@@ -425,7 +409,7 @@ class Game(object):
         # stored ok - log for debug
         logger.debug(message)
 
-        delete_cards, message = self.delete_existing_game_cards(session)
+        delete_cards, message = self.__delete_existing_game_cards(session)
 
         if not delete_cards:
             logger.error(message)
@@ -434,7 +418,7 @@ class Game(object):
         # stored ok - log for debug
         logger.debug(message)
 
-        store_cards, message = self.store_game_cards(session)
+        store_cards, message = self.__store_game_cards(session)
         if not store_cards:
             logger.error(message)
             return False, message
@@ -442,7 +426,7 @@ class Game(object):
         # stored ok - log for debug
         logger.debug(message)
 
-        player_save, message = self.save_players(session)
+        player_save, message = self.__save_players(session)
         if not player_save:
             logger.error(message)
             return False, message
@@ -523,6 +507,77 @@ class Game(object):
 
         self.state.play_list = self.cards.pile_played
 
+    def __actions_players_still_swapping(self, players_still_to_swap):
+        if self.state.this_player_id in players_still_to_swap:
+            action = "swap"
+            message = "You can choose to swap cards,"
+            logger.debug("swap - this player can still swap")
+        else:
+            action = "wait"
+            message = "You've swapped - but others are still swapping. Wait for them..."
+            logger.debug("swap - this player already done")
+        return {"allowed_action": action,
+                "action_message": message,
+                "allowed_players": players_still_to_swap}
+
+    def __actions_less_than_2_players_left(self):
+
+        logger.debug("only 1 player left")
+        if self.state.this_player_id in self.state.play_order:
+            logger.debug("this player is last player")
+            response = {"allowed_action": "lost",
+                "action_message": "You lost!"}
+        else:
+            logger.debug("this player isnt the last player")
+            response = {"allowed_action": "finished",
+                            "action_message": f"Game over - player {self.state.play_order} lost"}
+        
+        self.state.game_finished = True
+
+        return response
+
+    def __actions_this_player_finished_others_not(self, players_still_not_finished):
+        logger.debug("This player finished, but others haven't")
+        return {"allowed_action": "wait",
+                "action_message": "You've finished - but others are still playing. Please wait.",
+                "allowed_players": players_still_not_finished}
+
+    def __actions_is_next_player(self, players_still_not_finished):
+        logger.debug("this player is the next player")
+        card_type, card_stack = self.this_player.which_player_cards_can_player_use()
+        can_player_play_a_card = self.__can_play_cards(card_stack)
+        if can_player_play_a_card or card_type == Card_Types.CARD_FACE_DOWN:
+            # if we can play from visible cards on top of the played stack,
+            # or if we have only face down cards left
+            # let us play
+            logger.debug("Player can play a move and move type is %s", card_type)
+            action = "play"
+            action_message = "Please play your move"
+        else:
+            logger.debug("Player cannot move so must pick up")
+            action = "pick"
+            action_message = "You can't play - you must pick up cards."
+        return {"allowed_action": action,
+                "allowed_cards": Card_Types.Short_Name[card_type],
+                "action_message": action_message,
+                "allowed_players": players_still_not_finished,
+                "is_next_player": True}
+
+    def __actions_is_not_next_player(self, players_still_not_finished):
+        logger.debug("this player is not the next player - deferring calculations")
+        return {"allowed_action": "wait",
+                "allowed_players": players_still_not_finished,
+                "is_next_player": False,
+                "action_message": "wait for others to finish their moves"}
+
+    def __actions_this_players_move(self, players_still_not_finished):
+        logger.debug("this player still not finished")
+        if self.state.this_player_id == self.state.play_order[0]:
+            # can we actually play or do we have to pick up?
+            return self.__actions_is_next_player(players_still_not_finished)
+        # someone else is the next player
+        return self.__actions_is_not_next_player(players_still_not_finished)
+
     def calculate_player_allowed_actions(self):
         """calculates what action, if any, the current player is allowed to perform
 
@@ -554,71 +609,20 @@ class Game(object):
 
         if len(players_still_to_swap) > 0:
             # still some players not yet ready to start --> must be swapping
-            if self.state.this_player_id in players_still_to_swap:
-                action = "swap"
-                message = "You can choose to swap cards,"
-            else:
-                action = "wait"
-                message = "You've swapped - but others are still swapping. Wait for them..."
-            response = {"allowed_action": action,
-                        "action_message": message,
-                        "allowed_players": players_still_to_swap}
-        elif (self.state.this_player_id in self.state.play_order and
-              len(self.state.play_order) < 2):
-            # you;re the last player
-            logger.debug("Only 1 player left, and it's this player")
-            response = {"allowed_action": "lost",
-                        "action_message": "You lost!"}
-            self.state.game_finished = True
+            response = self.__actions_players_still_swapping(players_still_to_swap)
         elif len(self.state.play_order) < 2:
             # all done
-            logger.debug("only 1 player left, but it's not this playe")
-            response = {"allowed_action": "finished",
-                        "action_message": f"Game over - player {self.state.play_order} lost"}
-            self.state.game_finished = True
+            response = self.__actions_less_than_2_players_left()
         elif self.state.this_player_id in self.state.players_finished:
             # this player finished, others havent
-            logger.debug("This player finished, but others haven't")
-            response = {"allowed_action": "wait",
-                        "action_message": "You've finished - but others are still playing. Please wait.",
-                        "allowed_players": players_still_not_finished}
+            response = self.__actions_this_player_finished_others_not(players_still_not_finished)
         elif self.state.this_player_id in players_still_not_finished:
             # ok - so we've not finished the game overall
             # this player is still in play too
             # and everyone has swapped
             # so must be in game play
             # check if we're next or have to wait
-            logger.debug("this player still not finished")
-
-            is_next_player = self.state.this_player_id == self.state.play_order[0]
-            if is_next_player:
-                # can we actually play or do we have to pick up?
-                logger.debug("this player is the next player")
-                card_type, card_stack = self.this_player.which_player_cards_can_player_use()
-                can_player_play_a_card = self.__can_play_cards(card_stack)
-                if can_player_play_a_card or card_type == Card_Types.CARD_FACE_DOWN:
-                    # if we can play from visible cards on top of the played stack,
-                    # or if we have only face down cards left
-                    # let us play
-                    logger.debug("Player can play a move and move type is %s", card_type)
-                    action = "play"
-                    action_message = "Please play your move"
-                else:
-                    logger.debug("Player cannot move so must pick up")
-                    action = "pick"
-                    action_message = "You can't play - you must pick up cards."
-                response = {"allowed_action": action,
-                            "allowed_cards": Card_Types.Short_Name[card_type],
-                            "action_message": action_message,
-                            "allowed_players": players_still_not_finished,
-                            "is_next_player": is_next_player}
-            else:
-                # someone else is the next player
-                logger.debug("this player is not the next player - deferring calculations")
-                response = {"allowed_action": "wait",
-                            "allowed_players": players_still_not_finished,
-                            "is_next_player": is_next_player,
-                            "action_message": "wait for others to finish their moves"}
+            response = self.__actions_this_players_move(players_still_not_finished)
         else:
             logger.error("Unable to calculate game allowed moves")
             raise ValueError("Unable to calculate game allowed moves")
